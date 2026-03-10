@@ -14,18 +14,18 @@ Start a live Skardi server instance, register pipelines from a given ctx + pipel
 ## Key facts
 
 - **Port:** Always use **8081** (OrbStack occupies 8080)
-- **Skardi repo:** `../tmp/skardi`
+- **Skardi repo:** `../../tmp/skardi`
 - **Required env vars** (set based on ctx sources):
   - MySQL: `MYSQL_USER`, `MYSQL_PASSWORD`
   - MongoDB: `MONGO_USER`, `MONGO_PASS`
-- **Cargo run prefix:** `MYSQL_USER=skardi MYSQL_PASSWORD=skardi123 MONGO_USER=root MONGO_PASS=rootpass cargo run --manifest-path ../tmp/skardi/Cargo.toml --bin skardi-server --`
+- **Cargo run prefix:** `MYSQL_USER=skardi MYSQL_PASSWORD=skardi123 MONGO_USER=root MONGO_PASS=rootpass cargo run --manifest-path ../../tmp/skardi/Cargo.toml --bin skardi-server --`
 
 ## Server & pipeline commands
 
 ```bash
 # Start server (run in background)
 MYSQL_USER=skardi MYSQL_PASSWORD=skardi123 MONGO_USER=root MONGO_PASS=rootpass \
-  cargo run --manifest-path ../tmp/skardi/Cargo.toml --bin skardi-server -- \
+  cargo run --manifest-path ../../tmp/skardi/Cargo.toml --bin skardi-server -- \
   --ctx <abs_path_to_ctx.yaml> --port 8081
 
 # Register a pipeline

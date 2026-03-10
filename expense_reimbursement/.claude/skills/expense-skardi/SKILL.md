@@ -25,11 +25,13 @@ The Skardi server binary will be cloned and built in `../tmp/skardi`.
 
 ```bash
 mkdir -p ../../tmp
-git clone https://github.com/SkardiLabs/skardi ../..../tmp/skardi
-cargo build --manifest-path ../..../tmp/skardi/Cargo.toml --bin skardi-server
+git clone https://github.com/SkardiLabs/skardi ../../tmp/skardi
+cargo build --manifest-path ../../tmp/skardi/Cargo.toml --bin skardi-server
 ```
 
-Skip this step if `..../tmp/skardi` already exists (relative to the demo repo root). Wait for the build to complete before proceeding.
+Skip this step if `../../tmp/skardi` already exists. Wait for the build to complete before proceeding.
+
+**Note:** Requires rustc ≥ 1.91.0. If the build fails with a version error, run `rustup update stable` first.
 
 ---
 
@@ -74,7 +76,7 @@ export MYSQL_PASSWORD=skardi123
 export MONGO_USER=root
 export MONGO_PASS=rootpass
 
-cargo run --manifest-path ../tmp/skardi/Cargo.toml --bin skardi-server -- \
+cargo run --manifest-path ../../tmp/skardi/Cargo.toml --bin skardi-server -- \
   --ctx "$(pwd)/ctx_expense.yaml" \
   --port 8081
 ```

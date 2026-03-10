@@ -1,200 +1,158 @@
 # Expense Reimbursement Demo
 
-A Skardi demo that shows federated multi-source querying across **MySQL**,
-**MongoDB**, and **Lance** — with zero custom backend code.
+A side-by-side comparison of two backend paradigms for the same expense reimbursement app — a **traditional TypeScript/Express API** and a **Skardi federated query backend** — sharing one React frontend.
 
-## Architecture
+## What This Demo Shows
+
+| | Traditional | Skardi |
+|---|---|---|
+| **Backend** | Express + TypeScript | Skardi server (Rust) |
+| **Business logic** | ~976 lines across 18 service files | ~300 lines in 8 YAML pipeline files |
+| **Data access** | Manual DB calls per service | Declarative SQL across sources |
+| **Cross-source joins** | Implemented in TypeScript | Native federated SQL |
+| **Port** | 8082 | 8081 |
+
+Both backends are served by the same Vite frontend on **http://localhost:5173**, switched via an env var.
+
+---
+
+## Data Sources
 
 ```
-                    Skardi REST API
-                         │
-         ┌───────────────┼─────────────────┐
-         ▼               ▼                 ▼
-  MySQL (expense_db)  MongoDB (expense_db) Lance (file)
-  ├── claims          └── policies         └── claim_vectors
-  ├── vendors
-  └── approval_records
+           Frontend (Vite :5173)
+                   │
+       ┌───────────┴───────────┐
+       ▼                       ▼
+ Traditional backend      Skardi backend
+ Express :8082             :8081
+       │                       │
+       └───────────┬───────────┘
+                   │
+     ┌─────────────┼──────────────┐
+     ▼             ▼              ▼
+  MySQL          MongoDB        Lance
+  claims         policies       claim_vectors
+  vendors        (per-category  (KNN duplicate
+  approval_      limits & rules) detection)
+  records
 ```
 
-| Source    | Data                              | Purpose                      |
-|-----------|-----------------------------------|------------------------------|
-| MySQL     | `claims`, `vendors`, `approval_records` | Core claim lifecycle   |
-| MongoDB   | `policies`                        | Policy rules per category     |
-| Lance     | `claim_vectors`                   | Semantic duplicate detection  |
+| Source  | Data                                    | Purpose                        |
+|---------|-----------------------------------------|--------------------------------|
+| MySQL   | `claims`, `vendors`, `approval_records` | Core claim lifecycle           |
+| MongoDB | `policies`                              | Policy rules per category      |
+| Lance   | `claim_vectors`                         | Semantic duplicate detection   |
 
-> PostgreSQL and Iceberg are intentionally omitted for easier local setup.
-> The `score_claim` pipeline replaces the ONNX model with rule-based SQL scoring.
+---
 
-## Quick Start
+## Quickest Way to Run — Use Claude Skills
 
-### 1. Start infrastructure
+The fastest way to get the demo running is to use the built-in Claude Code skills. Open this directory in Claude Code and invoke:
+
+**Skardi backend (recommended for the demo):**
+```
+/expense-skardi
+```
+
+**Traditional TypeScript backend:**
+```
+/expense-traditional
+```
+
+Each skill walks through every setup step automatically — Docker, seeding, server startup, pipeline registration, and frontend launch.
+
+---
+
+## Manual Setup
+
+### Prerequisites
+
+- Docker
+- Node.js 18+
+- Python 3 with `pip3`
+- Rust (for Skardi only) — requires rustc ≥ 1.91.0 (`rustup update stable`)
+
+### Infrastructure (both backends)
 
 ```bash
-cd crates/server/demo/expense_reimbursement
+# From expense_reimbursement/
 docker compose up -d
-```
 
-MySQL seeds `claims`, `vendors`, and `approval_records` automatically on first
-start via `seed/init_mysql.sql`.
-
-### 2. Seed MongoDB policies
-
-```bash
+# Seed MongoDB
 docker exec -i expense_mongo mongosh -u root -p rootpass \
   --authenticationDatabase admin \
   --eval "$(cat seed/seed_mongo.js)"
+
+# Create Lance vector dataset
+pip3 install lancedb pyarrow numpy 2>/dev/null | tail -1
+python3 seed/create_lance_dataset.py
 ```
 
-### 3. Create Lance claim-vector dataset
+### Traditional Backend
 
 ```bash
-# From workspace root:
-pip install lance pyarrow numpy
-python crates/server/demo/expense_reimbursement/seed/create_lance_dataset.py
+cd backend && npm install && npm run dev
+# Runs on http://localhost:8082
 ```
 
-### 4. Start Skardi server
-
+Start the frontend pointed at the traditional backend:
 ```bash
-# From workspace root:
-export MYSQL_USER=skardi
-export MYSQL_PASSWORD=skardi123
-export MONGO_USER=root
-export MONGO_PASS=rootpass
-
-cargo run --bin skardi-server -- \
-  --ctx  crates/server/demo/expense_reimbursement/ctx_expense.yaml \
-  --port 8080
+cd frontend && npm install
+VITE_API_BACKEND=traditional npm run dev
 ```
 
-### 5. Register pipelines
+### Skardi Backend
 
+Clone and build the Skardi server (one-time):
 ```bash
-for p in crates/server/demo/expense_reimbursement/pipelines/*.yaml; do
-  curl -s -X POST http://localhost:8080/register_pipeline \
+mkdir -p ../../tmp
+git clone https://github.com/SkardiLabs/skardi ../../tmp/skardi
+cargo build --manifest-path ../../tmp/skardi/Cargo.toml --bin skardi-server
+```
+
+Start the server:
+```bash
+MYSQL_USER=skardi MYSQL_PASSWORD=skardi123 \
+MONGO_USER=root MONGO_PASS=rootpass \
+cargo run --manifest-path ../../tmp/skardi/Cargo.toml --bin skardi-server -- \
+  --ctx "$(pwd)/ctx_expense.yaml" --port 8081
+```
+
+Register pipelines:
+```bash
+for p in pipelines/*.yaml; do
+  curl -s -X POST http://localhost:8081/register_pipeline \
     -H "Content-Type: application/json" \
-    -d "{\"path\": \"$p\"}"
+    -d "{\"path\": \"$(pwd)/$p\"}"
   echo
 done
 ```
 
+Start the frontend (defaults to Skardi):
+```bash
+cd frontend && npm install && npm run dev
+```
+
 ---
 
-## Pipeline Walkthrough
+## Pipelines (Skardi)
 
-### Submit a new claim
+| Pipeline                  | Sources                  | Operation | Key Feature                     |
+|---------------------------|--------------------------|-----------|---------------------------------|
+| `submit_claim`            | MySQL                    | INSERT    | Claim submission                |
+| `score_claim`             | MySQL + MongoDB          | SELECT    | Federated anomaly scoring       |
+| `find_similar_claims`     | Lance                    | SELECT    | KNN vector similarity search    |
+| `get_claim_context`       | MySQL × 2 + MongoDB      | SELECT    | 3-source join for approver view |
+| `list_pending_approvals`  | MySQL                    | SELECT    | Queue listing by status         |
+| `list_my_claims`          | MySQL                    | SELECT    | Claims by employee              |
+| `approve_or_reject_claim` | MySQL                    | INSERT    | Decision recording              |
+| `enrich_queue`            | MySQL + MongoDB + Lance  | SELECT    | Enriched approval queue         |
+
+---
+
+## Stopping
 
 ```bash
-curl -X POST http://localhost:8080/submit_claim/execute \
-  -H "Content-Type: application/json" \
-  -d '{
-    "claim_id":    "C008",
-    "employee_id": "E005",
-    "amount":      650.00,
-    "category":    "Travel",
-    "vendor_name": "Sketchy Gadgets",
-    "expense_date":"2026-03-05",
-    "description": "Conference trip",
-    "receipt_url": "https://receipts/C008.pdf"
-  }'
+# Kill Node/Cargo processes, then:
+docker compose down
 ```
-
----
-
-### Score a claim (federated: MySQL + MongoDB)
-
-```bash
-curl -X POST http://localhost:8080/score_claim/execute \
-  -H "Content-Type: application/json" \
-  -d '{"claim_id": "C008"}'
-```
-
-```json
-{
-  "data": [{
-    "claim_id": "C008",
-    "amount": 650.0,
-    "category": "Travel",
-    "vendor_name": "Sketchy Gadgets",
-    "is_approved_vendor": 0,
-    "vendor_avg_amount": 0.0,
-    "policy_limit": 500.0,
-    "prior_claims_same_category": 0,
-    "anomaly_score": 0.5,
-    "routing_decision": "ELEVATED_REVIEW"
-  }],
-  "rows": 1,
-  "success": true
-}
-```
-
-> Scoring factors triggered:
-> - `+0.25` vendor not in approved registry
-> - `+0.25` amount (650) exceeds Travel policy limit (500)
-
----
-
-### Get full approver context (federated: MySQL × 2 + MongoDB)
-
-```bash
-curl -X POST http://localhost:8080/get_claim_context/execute \
-  -H "Content-Type: application/json" \
-  -d '{"claim_id": "C004"}'
-```
-
----
-
-### List pending claims for auditor review
-
-```bash
-curl -X POST http://localhost:8080/list_pending_approvals/execute \
-  -H "Content-Type: application/json" \
-  -d '{"status": "PENDING_AUDITOR"}'
-```
-
----
-
-### Find semantically similar claims (Lance KNN)
-
-```bash
-curl -X POST http://localhost:8080/find_similar_claims/execute \
-  -H "Content-Type: application/json" \
-  -d '{"reference_claim_id": "C006", "k": 3}'
-```
-
----
-
-### Record an approval decision
-
-```bash
-curl -X POST http://localhost:8080/approve_or_reject_claim/execute \
-  -H "Content-Type: application/json" \
-  -d '{
-    "record_id":    "R001",
-    "claim_id":     "C001",
-    "approver_id":  "MGR001",
-    "decision":     "APPROVE",
-    "comment":      "Amount within limits, approved vendor.",
-    "approval_tier":"L1"
-  }'
-```
-
----
-
-## Pipelines at a Glance
-
-| Pipeline                  | Sources               | Operation  | Key Feature                     |
-|---------------------------|-----------------------|------------|---------------------------------|
-| `submit_claim`            | MySQL (claims)        | INSERT     | Claim submission                |
-| `score_claim`             | MySQL + MongoDB       | SELECT     | Federated anomaly scoring       |
-| `find_similar_claims`     | Lance                 | SELECT     | KNN vector similarity search    |
-| `get_claim_context`       | MySQL × 2 + MongoDB   | SELECT     | 3-source join for approver view |
-| `list_pending_approvals`  | MySQL (claims)        | SELECT     | Queue listing by status         |
-| `approve_or_reject_claim` | MySQL (approval_records) | INSERT  | Decision recording              |
-
-## Why no PostgreSQL / Iceberg?
-
-| Original source  | Removed because                          | Replaced with                    |
-|------------------|------------------------------------------|----------------------------------|
-| PostgreSQL       | Redundant with MySQL for local demo      | MySQL (claims + vendors in one DB) |
-| Iceberg          | Requires Spark/Trino, heavy local setup  | MySQL approval_records (simpler audit trail) |
