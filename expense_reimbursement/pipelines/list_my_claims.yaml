@@ -1,0 +1,20 @@
+metadata:
+  name: "list_my_claims"
+  version: "1.0"
+  description: >
+    Returns all claims submitted by a given employee, ordered by submission
+    date descending. Used by employees to track the status of their own claims.
+
+query: |
+  SELECT
+    claim_id,
+    employee_id,
+    amount,
+    category,
+    vendor_name,
+    status,
+    anomaly_score,
+    submitted_at
+  FROM claims
+  WHERE employee_id = {employee_id}
+  ORDER BY submitted_at DESC

@@ -1,0 +1,28 @@
+metadata:
+  name: "approve_or_reject_claim"
+  version: "1.0"
+  description: >
+    Records an approval or rejection decision into MySQL approval_records.
+    decision must be 'APPROVE' or 'REJECT'.
+    approval_tier must be 'L1', 'AUDITOR', or 'FINANCE'.
+    The caller is responsible for generating a unique record_id.
+
+query: |
+  INSERT INTO approval_records (
+    record_id,
+    claim_id,
+    approver_id,
+    decision,
+    comment,
+    approval_tier,
+    decided_at
+  )
+  VALUES (
+    {record_id},
+    {claim_id},
+    {approver_id},
+    {decision},
+    {comment},
+    {approval_tier},
+    NOW()
+  )

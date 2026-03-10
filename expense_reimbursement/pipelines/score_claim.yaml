@@ -1,0 +1,64 @@
+metadata:
+  name: "score_claim"
+  version: "1.0"
+  description: >
+    Federated anomaly scoring pipeline. Joins three data sources in a single
+    query: MySQL claims + MySQL vendors + MongoDB policies. Computes a
+    rule-based anomaly score (0–1) and returns a routing decision.
+
+    Scoring factors:
+      +0.25  vendor not in approved registry
+      +0.30  claim amount > 2× vendor's typical invoice amount
+      +0.20  employee has > 10 prior claims in same category
+      +0.25  claim amount exceeds policy per-claim limit
+
+    Routing: anomaly_score >= 0.40 → ELEVATED_REVIEW (Senior Auditor)
+             anomaly_score <  0.40 → STANDARD_REVIEW (L1 Supervisor)
+
+query: |
+  WITH claim AS (
+    SELECT claim_id, employee_id, amount, category, vendor_name, expense_date
+    FROM   claims
+    WHERE  claim_id = {claim_id}
+  ),
+  history AS (
+    SELECT COUNT(*) AS prior_claims_same_category
+    FROM   claims h
+    JOIN   claim  c ON h.employee_id = c.employee_id
+                    AND h.category   = c.category
+    WHERE  h.claim_id != {claim_id}
+  )
+  SELECT
+    c.claim_id,
+    c.employee_id,
+    c.amount,
+    c.category,
+    c.vendor_name,
+    c.expense_date,
+    COALESCE(v.is_approved,        0)      AS is_approved_vendor,
+    COALESCE(v.avg_invoice_amount, 0.0)    AS vendor_avg_amount,
+    COALESCE(p.per_claim_limit,    1000.0) AS policy_limit,
+    h.prior_claims_same_category,
+    ROUND(
+        CASE WHEN COALESCE(v.is_approved, 0) = 0                                        THEN 0.25 ELSE 0.0 END
+      + CASE WHEN COALESCE(v.avg_invoice_amount, 0.0) > 0.0
+              AND c.amount > COALESCE(v.avg_invoice_amount, 0.0) * 2.0                  THEN 0.30 ELSE 0.0 END
+      + CASE WHEN h.prior_claims_same_category > 10                                     THEN 0.20 ELSE 0.0 END
+      + CASE WHEN c.amount > COALESCE(p.per_claim_limit, 1000.0)                        THEN 0.25 ELSE 0.0 END,
+      4
+    ) AS anomaly_score,
+    CASE
+      WHEN (
+          CASE WHEN COALESCE(v.is_approved, 0) = 0                                      THEN 0.25 ELSE 0.0 END
+        + CASE WHEN COALESCE(v.avg_invoice_amount, 0.0) > 0.0
+                AND c.amount > COALESCE(v.avg_invoice_amount, 0.0) * 2.0                THEN 0.30 ELSE 0.0 END
+        + CASE WHEN h.prior_claims_same_category > 10                                   THEN 0.20 ELSE 0.0 END
+        + CASE WHEN c.amount > COALESCE(p.per_claim_limit, 1000.0)                      THEN 0.25 ELSE 0.0 END
+      ) >= 0.40
+      THEN 'ELEVATED_REVIEW'
+      ELSE 'STANDARD_REVIEW'
+    END AS routing_decision
+  FROM  claim c
+  LEFT  JOIN vendors  v ON v.vendor_name = c.vendor_name
+  LEFT  JOIN policies p ON p.category    = c.category
+  CROSS JOIN history  h

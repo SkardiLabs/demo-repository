@@ -1,0 +1,30 @@
+metadata:
+  name: "get_claim_context"
+  version: "1.0"
+  description: >
+    Returns full context for an approver reviewing a claim. Joins three
+    sources in one query: MySQL claims, MySQL vendors, MongoDB policies.
+    Provides everything needed to make an informed approval decision.
+
+query: |
+  SELECT
+    c.claim_id,
+    c.employee_id,
+    c.amount,
+    c.category,
+    c.vendor_name,
+    c.expense_date,
+    c.description,
+    c.receipt_url,
+    c.status,
+    c.anomaly_score,
+    c.submitted_at,
+    COALESCE(v.is_approved, 0)          AS vendor_is_approved,
+    v.avg_invoice_amount                AS vendor_avg_invoice,
+    COALESCE(p.per_claim_limit, 1000.0) AS policy_per_claim_limit,
+    COALESCE(p.monthly_limit,   5000.0) AS policy_monthly_limit,
+    COALESCE(p.requires_receipt, false) AS policy_requires_receipt
+  FROM  claims c
+  LEFT  JOIN vendors  v ON v.vendor_name = c.vendor_name
+  LEFT  JOIN policies p ON p.category    = c.category
+  WHERE c.claim_id = {claim_id}

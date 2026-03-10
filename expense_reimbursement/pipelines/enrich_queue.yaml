@@ -1,0 +1,84 @@
+metadata:
+  name: "enrich_queue"
+  version: "1.0"
+  description: >
+    Full queue enrichment in a single federated query spanning MySQL and MongoDB.
+
+    Three CTEs perform aggregations entirely within MySQL:
+      budget_usage   — month-to-date approved spend per category
+      vendor_risk    — historical rejection rate per vendor
+                       (joins approval_records → claims)
+      employee_risk  — fraction of high-anomaly (>0.4) claims per employee
+
+    The main SELECT joins all three CTEs plus the MongoDB policies collection
+    onto the pending claims list, computing budget_headroom as a derived column.
+
+    ── Why this matters ──────────────────────────────────────────────────────
+    In the traditional TypeScript backend (QueueEnrichmentService) the same
+    result requires:
+      Query 1  — ClaimsService.listByStatus()            (MySQL)
+      Query 2  — ClaimsService.getBudgetUsage()          (MySQL, aggregation)
+      Query 3  — ClaimsService.getVendorRejectionRates() (MySQL, JOIN+agg)
+      Query 4  — ClaimsService.getEmployeeRiskRatios()   (MySQL, aggregation)
+      Query 5…K — PolicyService.getByCategory() × unique-categories (MongoDB)
+      Query K+1…K+N — SimilarityService.findSimilar() × claims (Lance KNN)
+
+    Here every relational enrichment column is a single SQL expression.
+
+query: |
+  WITH budget_usage AS (
+    SELECT
+      c.category,
+      SUM(c.amount) AS spent_this_month
+    FROM   approval_records ar
+    JOIN   claims c ON c.claim_id = ar.claim_id
+    WHERE  c.status != 'REJECTED'
+      AND  c.submitted_at >= DATE_FORMAT(NOW(), '%Y-%m-01')
+    GROUP  BY c.category
+  ),
+  vendor_risk AS (
+    SELECT
+      c.vendor_name,
+      ROUND(
+        SUM(CASE WHEN ar.decision = 'REJECT' THEN 1.0 ELSE 0.0 END)
+        / NULLIF(COUNT(*), 0),
+        4
+      ) AS rejection_rate
+    FROM   approval_records ar
+    JOIN   claims c ON c.claim_id = ar.claim_id
+    GROUP  BY c.vendor_name
+  ),
+  employee_risk AS (
+    SELECT
+      ar.approver_id  AS employee_id,
+      ROUND(
+        AVG(CASE WHEN c.anomaly_score > 0.4 THEN 1.0 ELSE 0.0 END),
+        4
+      ) AS risk_ratio
+    FROM   approval_records ar
+    JOIN   claims c ON c.claim_id = ar.claim_id
+    GROUP  BY ar.approver_id
+  )
+  SELECT
+    c.claim_id,
+    c.employee_id,
+    c.amount,
+    c.category,
+    c.vendor_name,
+    c.status,
+    c.anomaly_score,
+    c.submitted_at,
+    ROUND(
+      COALESCE(p.monthly_limit,  5000.0) - COALESCE(b.spent_this_month, 0.0),
+      2
+    )                                        AS budget_headroom,
+    COALESCE(vr.rejection_rate, 0.0)         AS vendor_rejection_rate,
+    COALESCE(er.risk_ratio,     0.0)         AS employee_risk_ratio,
+    COALESCE(p.monthly_limit,   5000.0)      AS policy_monthly_limit
+  FROM   claims         c
+  LEFT   JOIN policies     p  ON p.category     = c.category
+  LEFT   JOIN budget_usage b  ON b.category     = c.category
+  LEFT   JOIN vendor_risk  vr ON vr.vendor_name = c.vendor_name
+  LEFT   JOIN employee_risk er ON er.employee_id = c.employee_id
+  WHERE  c.status = {status}
+  ORDER  BY c.anomaly_score DESC, c.submitted_at ASC
