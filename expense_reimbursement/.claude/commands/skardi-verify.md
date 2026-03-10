@@ -17,16 +17,16 @@ The CLI supports **local CSV and Parquet sources only** — it cannot connect to
 
 ```bash
 # Run a SQL query against a ctx
-cargo run --manifest-path /Users/bchen/code/skardi/Cargo.toml --bin skardi -- query --ctx <ctx.yaml> --sql "SELECT ..."
+cargo run --manifest-path ../tmp/skardi/Cargo.toml --bin skardi -- query --ctx <ctx.yaml> --sql "SELECT ..."
 
 # Run query from a .sql file
-cargo run --manifest-path /Users/bchen/code/skardi/Cargo.toml --bin skardi -- query --ctx <ctx.yaml> --file query.sql
+cargo run --manifest-path ../tmp/skardi/Cargo.toml --bin skardi -- query --ctx <ctx.yaml> --file query.sql
 
 # Show schema for all tables in ctx (CSV/Parquet only)
-cargo run --manifest-path /Users/bchen/code/skardi/Cargo.toml --bin skardi -- query --ctx <ctx.yaml> --schema --all
+cargo run --manifest-path ../tmp/skardi/Cargo.toml --bin skardi -- query --ctx <ctx.yaml> --schema --all
 
 # Show schema for a specific table
-cargo run --manifest-path /Users/bchen/code/skardi/Cargo.toml --bin skardi -- query --ctx <ctx.yaml> --schema -t <table_name>
+cargo run --manifest-path ../tmp/skardi/Cargo.toml --bin skardi -- query --ctx <ctx.yaml> --schema -t <table_name>
 ```
 
 Run from any directory — `--manifest-path` points to the skardi Cargo workspace.
