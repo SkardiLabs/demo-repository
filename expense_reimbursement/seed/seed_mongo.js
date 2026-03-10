@@ -8,7 +8,7 @@
 //   mongosh mongodb://localhost:27017 seed_mongo.js
 // ============================================================
 
-const db = connect("mongodb://localhost:27017/expense_db");
+const db = connect("mongodb://root:rootpass@localhost:27017/expense_db?authSource=admin");
 
 db.policies.drop();
 

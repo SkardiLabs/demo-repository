@@ -60,8 +60,8 @@ Confirm output shows documents inserted into `expense_db.policies`.
 ## Step 3 — Create Lance claim-vector dataset
 
 ```bash
-pip install lancedb pyarrow numpy 2>/dev/null | tail -1
-python seed/create_lance_dataset.py
+pip3 install lancedb pyarrow numpy 2>/dev/null | tail -1
+python3 seed/create_lance_dataset.py
 ```
 
 ---

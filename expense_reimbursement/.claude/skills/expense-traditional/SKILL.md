@@ -44,8 +44,8 @@ Confirm output shows documents inserted into `expense_db.policies`.
 ## Step 3 — Create Lance claim-vector dataset
 
 ```bash
-pip install lancedb pyarrow numpy 2>/dev/null | tail -1
-python seed/create_lance_dataset.py
+pip3 install lancedb pyarrow numpy 2>/dev/null | tail -1
+python3 seed/create_lance_dataset.py
 ```
 
 ---
@@ -56,7 +56,7 @@ python seed/create_lance_dataset.py
 cd backend && npm install && npm run dev
 ```
 
-The server starts on **http://localhost:3000** (or whichever port is configured in `src/index.ts`). Run this in a separate terminal or background process.
+The server starts on **http://localhost:8082**. Run this in a separate terminal or background process.
 
 ---
 
@@ -76,7 +76,7 @@ Vite starts on **http://localhost:5173** by default.
 
 Check the backend is up:
 ```bash
-curl -s http://localhost:3000/claims | head -c 200
+curl -s http://localhost:8082/claims | head -c 200
 ```
 
 ---
