@@ -1,0 +1,32 @@
+metadata:
+  name: "submit_claim"
+  version: "1.0"
+  description: >
+    Submit a new expense claim. Inserts a row into MySQL claims table with
+    status SUBMITTED. The caller is responsible for generating a unique claim_id.
+
+query: |
+  INSERT INTO claims (
+    claim_id,
+    employee_id,
+    amount,
+    category,
+    vendor_name,
+    expense_date,
+    description,
+    receipt_url,
+    status,
+    submitted_at
+  )
+  VALUES (
+    {claim_id},
+    {employee_id},
+    {amount},
+    {category},
+    {vendor_name},
+    {expense_date},
+    {description},
+    {receipt_url},
+    'SUBMITTED',
+    NOW()
+  )

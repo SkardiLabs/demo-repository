@@ -1,0 +1,49 @@
+version: "3.9"
+
+# Expense Reimbursement Demo — local infrastructure
+# Provides MySQL and MongoDB. Lance and ONNX are file-based (no container needed).
+#
+# Usage:
+#   docker compose up -d
+#   docker compose down      # stop
+#   docker compose down -v   # stop + wipe volumes
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: expense_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: expense_db
+      MYSQL_USER: skardi
+      MYSQL_PASSWORD: skardi123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./seed/init_mysql.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpass"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongo:
+    image: mongo:7.0
+    container_name: expense_mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: rootpass
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ping:1})"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mysql_data:
+  mongo_data:

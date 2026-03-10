@@ -1,0 +1,21 @@
+metadata:
+  name: "list_pending_approvals"
+  version: "1.0"
+  description: >
+    Returns all claims in a given approval status, ordered by anomaly score
+    descending so highest-risk claims surface first. Pass status as one of:
+    PENDING_L1, PENDING_AUDITOR, PENDING_FINANCE, PENDING_PAYMENT.
+
+query: |
+  SELECT
+    c.claim_id,
+    c.employee_id,
+    c.amount,
+    c.category,
+    c.vendor_name,
+    c.status,
+    c.anomaly_score,
+    c.submitted_at
+  FROM   claims c
+  WHERE  c.status = {status}
+  ORDER  BY c.anomaly_score DESC, c.submitted_at ASC

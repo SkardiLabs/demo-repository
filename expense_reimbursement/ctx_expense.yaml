@@ -1,0 +1,53 @@
+data_sources:
+  # ── MySQL: claims (read-write) ────────────────────────────────────────────
+  - name: "claims"
+    type: "mysql"
+    access_mode: "read_write"
+    connection_string: "mysql://localhost:3306/expense_db"
+    description: "Expense claims — primary claim lifecycle table"
+    options:
+      table: "claims"
+      user_env: "MYSQL_USER"
+      pass_env: "MYSQL_PASSWORD"
+      ssl_mode: "disabled"
+
+  # ── MySQL: vendors (read-only) ────────────────────────────────────────────
+  - name: "vendors"
+    type: "mysql"
+    connection_string: "mysql://localhost:3306/expense_db"
+    description: "Approved vendor registry with typical invoice amounts"
+    options:
+      table: "vendors"
+      user_env: "MYSQL_USER"
+      pass_env: "MYSQL_PASSWORD"
+      ssl_mode: "disabled"
+
+  # ── MySQL: approval_records (read-write) ──────────────────────────────────
+  - name: "approval_records"
+    type: "mysql"
+    access_mode: "read_write"
+    connection_string: "mysql://localhost:3306/expense_db"
+    description: "Approval and rejection decisions for each claim"
+    options:
+      table: "approval_records"
+      user_env: "MYSQL_USER"
+      pass_env: "MYSQL_PASSWORD"
+      ssl_mode: "disabled"
+
+  # ── MongoDB: policies (read-only) ─────────────────────────────────────────
+  - name: "policies"
+    type: "mongo"
+    connection_string: "mongodb://localhost:27017"
+    description: "Reimbursement policy rules per category — owned by HR/Compliance"
+    options:
+      database: "expense_db"
+      collection: "policies"
+      primary_key: "category"
+      user_env: "MONGO_USER"
+      pass_env: "MONGO_PASS"
+
+  # ── Lance: claim_vectors (read-only) ──────────────────────────────────────
+  - name: "claim_vectors"
+    type: "lance"
+    path: "crates/server/demo/expense_reimbursement/data/claim_vectors.lance"
+    description: "Claim text embeddings for semantic duplicate detection (8-dim)"

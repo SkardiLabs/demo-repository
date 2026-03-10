@@ -1,0 +1,21 @@
+metadata:
+  name: "find_similar_claims"
+  version: "1.0"
+  description: >
+    Vector similarity search using Lance KNN. Finds the k most semantically
+    similar historical claims to a reference claim based on pre-computed
+    8-dimensional text embeddings. Claims with _distance < 0.08 are strong
+    duplicate candidates.
+
+query: |
+  SELECT
+    knn.claim_id,
+    knn._distance AS similarity_distance
+  FROM lance_knn(
+    'claim_vectors',
+    'embedding',
+    (SELECT embedding FROM claim_vectors WHERE claim_id = {reference_claim_id}),
+    4
+  ) knn
+  WHERE knn.claim_id != {reference_claim_id}
+  ORDER BY knn._distance ASC
