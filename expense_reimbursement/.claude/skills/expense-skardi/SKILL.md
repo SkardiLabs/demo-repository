@@ -17,28 +17,22 @@ All paths below are relative to the workspace root (this directory):
 ./
 ```
 
-The Skardi server binary will be cloned and built in `../tmp/skardi`.
-
 ---
 
-## Step 0 — Clone and build the Skardi repo
+## Step 0 — Pull the Skardi Docker image
 
 ```bash
-mkdir -p ../../tmp
-git clone https://github.com/SkardiLabs/skardi ../../tmp/skardi
-cargo build --manifest-path ../../tmp/skardi/Cargo.toml --bin skardi-server
+docker pull ghcr.io/skardilabs/skardi:latest
 ```
 
-Skip this step if `../../tmp/skardi` already exists. Wait for the build to complete before proceeding.
-
-**Note:** Requires rustc ≥ 1.91.0. If the build fails with a version error, run `rustup update stable` first.
+Skip this step if the image is already present locally (`docker images ghcr.io/skardilabs/skardi`).
 
 ---
 
 ## Step 1 — Start infrastructure (MySQL + MongoDB)
 
 ```bash
-docker compose up -d
+docker compose up -d mysql mongo
 ```
 
 Wait for containers to be healthy. MySQL seeds `claims`, `vendors`, and `approval_records` automatically via `seed/init_mysql.sql`.
@@ -63,7 +57,8 @@ Confirm output shows documents inserted into `expense_db.policies`.
 
 ```bash
 pip3 install lancedb pyarrow numpy 2>/dev/null | tail -1
-python3 seed/create_lance_dataset.py
+mkdir -p data
+python3 seed/create_lance_dataset.py ./data/claim_vectors.lance
 ```
 
 ---
@@ -71,19 +66,16 @@ python3 seed/create_lance_dataset.py
 ## Step 4 — Start the Skardi server
 
 ```bash
-export MYSQL_USER=skardi
-export MYSQL_PASSWORD=skardi123
-export MONGO_USER=root
-export MONGO_PASS=rootpass
-
-cargo run --manifest-path ../../tmp/skardi/Cargo.toml --bin skardi-server -- \
-  --ctx "$(pwd)/ctx_expense.yaml" \
-  --port 8081
+docker compose up -d skardi
 ```
 
-Run this in a separate terminal. Use port **8081** (8080 is occupied by OrbStack).
+The container uses `ctx_expense_docker.yaml` (Docker service hostnames) and mounts `./pipelines` and `./data` read-only. Wait until the container is running before proceeding:
 
-Wait until you see the server ready message before proceeding.
+```bash
+docker compose logs -f skardi
+```
+
+Wait until you see the server ready message, then Ctrl-C.
 
 ---
 
@@ -91,10 +83,11 @@ Wait until you see the server ready message before proceeding.
 
 ```bash
 for p in pipelines/*.yaml; do
-  echo "Registering $p..."
+  pipeline_name=$(basename "$p" .yaml)
+  echo "Registering $pipeline_name..."
   curl -s -X POST http://localhost:8081/register_pipeline \
     -H "Content-Type: application/json" \
-    -d "{\"path\": \"$(pwd)/$p\"}" | python3 -m json.tool
+    -d "{\"path\": \"/app/pipelines/${pipeline_name}.yaml\"}" | python3 -m json.tool
   echo
 done
 ```
@@ -137,5 +130,5 @@ curl -s -X POST http://localhost:8081/find_similar_claims/execute \
 
 - **No application code** — all business logic lives in 8 YAML pipeline files (~300 lines total).
 - Cross-source joins (MySQL × 2 + MongoDB), vector KNN, and INSERT operations are all expressed as declarative SQL in the pipeline YAMLs.
-- To stop: kill the `cargo run` process and run `docker compose down`.
+- To stop: run `docker compose down`.
 - If pipeline registration fails with a schema mismatch, check that the Lance dataset was created correctly and that MongoDB documents have string `_id` fields.
