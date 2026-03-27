@@ -1,6 +1,6 @@
 ---
 name: expense-skardi
-description: Start the expense reimbursement demo with the Skardi federated query backend. Runs infrastructure, seeds data, starts the Skardi server, registers YAML pipelines, and starts the Vite frontend.
+description: Start the expense reimbursement demo with the Skardi federated query backend. Runs infrastructure, seeds data, starts the Skardi server (with pipelines loaded at startup via --pipeline flag), and starts the Vite frontend.
 disable-model-invocation: false
 user-invocable: true
 allowed-tools: Bash, Read
@@ -69,34 +69,19 @@ python3 seed/create_lance_dataset.py ./data/claim_vectors.lance
 docker compose up -d skardi
 ```
 
-The container uses `ctx_expense_docker.yaml` (Docker service hostnames) and mounts `./pipelines` and `./data` read-only. Wait until the container is running before proceeding:
+The container uses `ctx_expense_docker.yaml` (Docker service hostnames) and mounts `./pipelines` and `./data` read-only. Pipelines are loaded automatically at startup via the `--pipeline /app/pipelines` flag — no separate registration step needed.
+
+Wait until the container is running before proceeding:
 
 ```bash
 docker compose logs -f skardi
 ```
 
-Wait until you see the server ready message, then Ctrl-C.
+Wait until you see the server ready message (all 8 pipelines listed), then Ctrl-C.
 
 ---
 
-## Step 5 — Register pipelines
-
-```bash
-for p in pipelines/*.yaml; do
-  pipeline_name=$(basename "$p" .yaml)
-  echo "Registering $pipeline_name..."
-  curl -s -X POST http://localhost:8081/register_pipeline \
-    -H "Content-Type: application/json" \
-    -d "{\"path\": \"/app/pipelines/${pipeline_name}.yaml\"}" | python3 -m json.tool
-  echo
-done
-```
-
-All 8 pipelines should register successfully: `submit_claim`, `score_claim`, `find_similar_claims`, `get_claim_context`, `list_pending_approvals`, `approve_or_reject_claim`, `enrich_queue`, and any others in the pipelines directory.
-
----
-
-## Step 6 — Start the frontend
+## Step 5 — Start the frontend
 
 In a separate terminal:
 

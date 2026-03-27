@@ -55,6 +55,8 @@ python crates/server/demo/expense_reimbursement/seed/create_lance_dataset.py
 
 ### 4. Start Skardi server
 
+Pass the pipelines directory via `--pipeline` — all `.yaml` files in it are loaded at startup:
+
 ```bash
 # From workspace root:
 export MYSQL_USER=skardi
@@ -63,19 +65,9 @@ export MONGO_USER=root
 export MONGO_PASS=rootpass
 
 cargo run --bin skardi-server -- \
-  --ctx  crates/server/demo/expense_reimbursement/ctx_expense.yaml \
+  --ctx      crates/server/demo/expense_reimbursement/ctx_expense.yaml \
+  --pipeline crates/server/demo/expense_reimbursement/pipelines \
   --port 8080
-```
-
-### 5. Register pipelines
-
-```bash
-for p in crates/server/demo/expense_reimbursement/pipelines/*.yaml; do
-  curl -s -X POST http://localhost:8080/register_pipeline \
-    -H "Content-Type: application/json" \
-    -d "{\"path\": \"$p\"}"
-  echo
-done
 ```
 
 ---

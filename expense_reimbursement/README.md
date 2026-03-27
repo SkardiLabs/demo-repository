@@ -109,18 +109,7 @@ docker pull ghcr.io/skardilabs/skardi:latest
 docker compose up -d skardi
 ```
 
-The server uses `ctx_expense_docker.yaml` (Docker service hostnames, container-internal Lance path) and mounts `./pipelines` and `./data` read-only into the container.
-
-Register pipelines (paths are container-internal):
-```bash
-for p in pipelines/*.yaml; do
-  pipeline_name=$(basename "$p" .yaml)
-  curl -s -X POST http://localhost:8081/register_pipeline \
-    -H "Content-Type: application/json" \
-    -d "{\"path\": \"/app/pipelines/${pipeline_name}.yaml\"}"
-  echo
-done
-```
+The server uses `ctx_expense_docker.yaml` (Docker service hostnames, container-internal Lance path) and mounts `./pipelines` and `./data` read-only into the container. All pipelines are loaded automatically at startup via `--pipeline /app/pipelines` — no separate registration step needed.
 
 Start the frontend (defaults to Skardi):
 ```bash

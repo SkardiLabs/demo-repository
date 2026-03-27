@@ -60,7 +60,7 @@ services:
       - ./ctx_expense_docker.yaml:/app/ctx.yaml:ro
       - ./pipelines:/app/pipelines:ro
       - ./data:/app/data:ro
-    command: ["skardi-server", "--ctx", "/app/ctx.yaml", "--port", "8081"]
+    command: ["skardi-server", "--ctx", "/app/ctx.yaml", "--pipeline", "/app/pipelines", "--port", "8081"]
     depends_on:
       mysql:
         condition: service_healthy
