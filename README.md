@@ -1,4 +1,3 @@
-# Welcome to your organization's demo respository
-This code repository (or "repo") is designed to demonstrate the best GitHub has to offer with the least amount of noise.
+# Welcome to Skardi demo respository!
 
-The repo includes an `index.html` file (so it can render a web page), two GitHub Actions workflows, and a CSS stylesheet dependency.
+You can checkout the demo under expense_reimbursement/, where we put a comparison of setting up an multi-role expense reimbursement pipeline using both the traditional approach and Skardi's approach, see the difference yourself!

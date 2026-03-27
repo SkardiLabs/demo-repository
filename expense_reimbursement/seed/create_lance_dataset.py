@@ -14,11 +14,12 @@ Usage (from workspace root):
 """
 
 import os
+import sys
 import numpy as np
 import pyarrow as pa
 import lancedb
 
-OUTPUT_PATH = "crates/server/demo/expense_reimbursement/data/claim_vectors.lance"
+OUTPUT_PATH = sys.argv[1] if len(sys.argv) > 1 else "crates/server/demo/expense_reimbursement/data/claim_vectors.lance"
 DIM = 8
 rng = np.random.default_rng(42)
 

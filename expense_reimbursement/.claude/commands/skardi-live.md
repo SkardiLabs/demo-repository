@@ -23,15 +23,10 @@ Start a live Skardi server instance, register pipelines from a given ctx + pipel
 ## Server & pipeline commands
 
 ```bash
-# Start server (run in background)
+# Start server with pipelines directory (run in background)
 MYSQL_USER=skardi MYSQL_PASSWORD=skardi123 MONGO_USER=root MONGO_PASS=rootpass \
   cargo run --manifest-path ../../tmp/skardi/Cargo.toml --bin skardi-server -- \
-  --ctx <abs_path_to_ctx.yaml> --port 8081
-
-# Register a pipeline
-curl -s -X POST http://localhost:8081/register_pipeline \
-  -H "Content-Type: application/json" \
-  -d '{"path": "<absolute_path_to_pipeline.yaml>"}'
+  --ctx <abs_path_to_ctx.yaml> --pipeline <abs_path_to_pipelines_dir> --port 8081
 
 # Execute a pipeline (GET with query params)
 curl -s "http://localhost:8081/<pipeline_name>/execute?param=value"
@@ -55,19 +50,17 @@ curl -s -X POST http://localhost:8081/<pipeline_name>/execute \
    If yes, ask the user whether to kill it and restart, or reuse it.
 
 3. **Start the server in the background** using `run_in_background: true`.
-   - Use absolute paths for `--ctx`
+   - Use absolute paths for `--ctx` and `--pipeline`
+   - Pass the `pipelines/` directory (or a single YAML file) via `--pipeline`
    - Wait for it to be ready by polling:
      ```bash
      curl -s http://localhost:8081/health || curl -s http://localhost:8081/
      ```
    - Give it up to ~10s (try a few times with brief pauses)
 
-4. **Find pipeline YAML files** — look in the same directory as the ctx, or a `pipelines/` subdirectory next to it.
+4. **Find pipeline YAML files** — look in the same directory as the ctx, or a `pipelines/` subdirectory next to it. Pass that path as `--pipeline` when starting the server.
 
-5. **Register each pipeline** using `POST /register_pipeline` with the absolute path.
-   - Report success/failure for each.
-
-6. **Test each registered pipeline:**
+5. **Test each loaded pipeline:**
    - Read each pipeline YAML to understand its query and `{param}` placeholders
    - For SELECT pipelines: run with NULL or default test values (e.g., `?limit=5`)
    - For INSERT/UPDATE/DELETE pipelines: skip live execution by default unless the user confirms; just report the endpoint URL

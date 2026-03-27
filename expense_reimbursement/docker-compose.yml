@@ -1,12 +1,14 @@
 version: "3.9"
 
 # Expense Reimbursement Demo — local infrastructure
-# Provides MySQL and MongoDB. Lance and ONNX are file-based (no container needed).
+# Provides MySQL, MongoDB, and the Skardi federated query server.
+# Lance data is file-based and mounted into the Skardi container from ./data/.
 #
 # Usage:
-#   docker compose up -d
-#   docker compose down      # stop
-#   docker compose down -v   # stop + wipe volumes
+#   docker compose up -d           # start everything (including Skardi)
+#   docker compose up -d mysql mongo  # start only databases (for traditional backend)
+#   docker compose down            # stop
+#   docker compose down -v         # stop + wipe volumes
 
 services:
   mysql:
@@ -43,6 +45,27 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  skardi:
+    image: ghcr.io/skardilabs/skardi/skardi-server:latest
+    container_name: expense_skardi
+    environment:
+      MYSQL_USER: skardi
+      MYSQL_PASSWORD: skardi123
+      MONGO_USER: root
+      MONGO_PASS: rootpass
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./ctx_expense_docker.yaml:/app/ctx.yaml:ro
+      - ./pipelines:/app/pipelines:ro
+      - ./data:/app/data:ro
+    command: ["--ctx", "/app/ctx.yaml", "--pipeline", "/app/pipelines", "--port", "8081"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
 
 volumes:
   mysql_data:

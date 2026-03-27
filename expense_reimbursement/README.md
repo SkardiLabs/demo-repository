@@ -70,22 +70,22 @@ Each skill walks through every setup step automatically — Docker, seeding, ser
 - Docker
 - Node.js 18+
 - Python 3 with `pip3`
-- Rust (for Skardi only) — requires rustc ≥ 1.91.0 (`rustup update stable`)
 
 ### Infrastructure (both backends)
 
 ```bash
 # From expense_reimbursement/
-docker compose up -d
+docker compose up -d mysql mongo
 
 # Seed MongoDB
 docker exec -i expense_mongo mongosh -u root -p rootpass \
   --authenticationDatabase admin \
   --eval "$(cat seed/seed_mongo.js)"
 
-# Create Lance vector dataset
+# Create Lance vector dataset (written to ./data/ for Docker mount)
 pip3 install lancedb pyarrow numpy 2>/dev/null | tail -1
-python3 seed/create_lance_dataset.py
+mkdir -p data
+python3 seed/create_lance_dataset.py ./data/claim_vectors.lance
 ```
 
 ### Traditional Backend
@@ -103,30 +103,13 @@ VITE_API_BACKEND=traditional npm run dev
 
 ### Skardi Backend
 
-Clone and build the Skardi server (one-time):
+Pull the official image and start the server:
 ```bash
-mkdir -p ../../tmp
-git clone https://github.com/SkardiLabs/skardi ../../tmp/skardi
-cargo build --manifest-path ../../tmp/skardi/Cargo.toml --bin skardi-server
+docker pull ghcr.io/skardilabs/skardi/skardi-server:latest
+docker compose up -d skardi
 ```
 
-Start the server:
-```bash
-MYSQL_USER=skardi MYSQL_PASSWORD=skardi123 \
-MONGO_USER=root MONGO_PASS=rootpass \
-cargo run --manifest-path ../../tmp/skardi/Cargo.toml --bin skardi-server -- \
-  --ctx "$(pwd)/ctx_expense.yaml" --port 8081
-```
-
-Register pipelines:
-```bash
-for p in pipelines/*.yaml; do
-  curl -s -X POST http://localhost:8081/register_pipeline \
-    -H "Content-Type: application/json" \
-    -d "{\"path\": \"$(pwd)/$p\"}"
-  echo
-done
-```
+The server uses `ctx_expense_docker.yaml` (Docker service hostnames, container-internal Lance path) and mounts `./pipelines` and `./data` read-only into the container. All pipelines are loaded automatically at startup via `--pipeline /app/pipelines` — no separate registration step needed.
 
 Start the frontend (defaults to Skardi):
 ```bash
@@ -153,6 +136,6 @@ cd frontend && npm install && npm run dev
 ## Stopping
 
 ```bash
-# Kill Node/Cargo processes, then:
+# Kill Node processes, then:
 docker compose down
 ```
