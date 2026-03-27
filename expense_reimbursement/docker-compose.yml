@@ -47,7 +47,7 @@ services:
       retries: 5
 
   skardi:
-    image: ghcr.io/skardilabs/skardi:latest
+    image: ghcr.io/skardilabs/skardi/skardi-server:latest
     container_name: expense_skardi
     environment:
       MYSQL_USER: skardi
@@ -60,7 +60,7 @@ services:
       - ./ctx_expense_docker.yaml:/app/ctx.yaml:ro
       - ./pipelines:/app/pipelines:ro
       - ./data:/app/data:ro
-    command: ["skardi-server", "--ctx", "/app/ctx.yaml", "--pipeline", "/app/pipelines", "--port", "8081"]
+    command: ["--ctx", "/app/ctx.yaml", "--pipeline", "/app/pipelines", "--port", "8081"]
     depends_on:
       mysql:
         condition: service_healthy

@@ -105,7 +105,7 @@ VITE_API_BACKEND=traditional npm run dev
 
 Pull the official image and start the server:
 ```bash
-docker pull ghcr.io/skardilabs/skardi:latest
+docker pull ghcr.io/skardilabs/skardi/skardi-server:latest
 docker compose up -d skardi
 ```
 

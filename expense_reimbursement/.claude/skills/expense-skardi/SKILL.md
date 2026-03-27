@@ -22,10 +22,10 @@ All paths below are relative to the workspace root (this directory):
 ## Step 0 — Pull the Skardi Docker image
 
 ```bash
-docker pull ghcr.io/skardilabs/skardi:latest
+docker pull ghcr.io/skardilabs/skardi/skardi-server:latest
 ```
 
-Skip this step if the image is already present locally (`docker images ghcr.io/skardilabs/skardi`).
+Skip this step if the image is already present locally (`docker images ghcr.io/skardilabs/skardi/skardi-server`).
 
 ---
 
