@@ -1,6 +1,4 @@
-import { supabase } from '../db/supabase'
-
-// ── EnrichedClaim ─────────────────────────────────────────────────────────
+import { pool } from '../db/supabase'
 
 export interface EnrichedClaim {
   claim_id: string
@@ -29,32 +27,22 @@ export interface EnrichmentResult {
 }
 
 // ── QueueEnrichmentService ────────────────────────────────────────────────
-// Calls the enrich_queue() PostgreSQL function via supabase.rpc().
+// Calls the enrich_queue() PostgreSQL function: a single CTE query with
+// pgvector LATERAL join that computes budget usage, vendor risk, employee
+// risk, policy limits, AND nearest-duplicate KNN — all in one query plan.
 //
-// Compare with backend/src/services/queue-enrichment-service.ts:
-//   Traditional:  4 MySQL round-trips
-//               + K MongoDB calls (one per unique category in queue)
-//               + N Lance KNN calls (one per claim in queue)
-//               Total: 4 + K + N  separate network calls.
-//
-//   Supabase:   1 RPC call → single CTE query with pgvector LATERAL join.
-//               PostgreSQL executes budget_usage, vendor_risk, employee_risk
-//               CTEs AND the per-claim KNN in one query plan.
-//               Total: 1 query.  query_count reported as 1.
+// query_count: 1  (vs 4+K+N in the traditional backend)
 
 export class QueueEnrichmentService {
 
   async enrichQueue(status: string): Promise<EnrichmentResult> {
     const t0 = Date.now()
-
-    const { data, error } = await supabase.rpc('enrich_queue', {
-      p_status: status,
-    })
-
-    if (error) throw new Error(error.message)
-
+    const { rows } = await pool.query<EnrichedClaim>(
+      `SELECT * FROM enrich_queue($1)`,
+      [status],
+    )
     return {
-      data: (data ?? []) as EnrichedClaim[],
+      data: rows,
       query_count: 1,
       execution_time_ms: Date.now() - t0,
     }

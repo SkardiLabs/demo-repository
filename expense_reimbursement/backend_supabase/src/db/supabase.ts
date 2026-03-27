@@ -1,19 +1,20 @@
-// ── Supabase client singleton ─────────────────────────────────────────────
-// Replaces db/mysql.ts + db/mongo.ts from the traditional backend.
-// One client, one connection string — all tables and RPC functions are
-// accessible via the Supabase PostgREST API.
+// ── PostgreSQL connection pool ────────────────────────────────────────────
+// Uses node-postgres (pg) to connect directly to the pgvector/pg16 container.
+// All services query via this shared pool.
 //
-// Local development (Supabase CLI):
-//   supabase start
-//   → URL:      http://localhost:54321
-//   → anon key: printed by `supabase start` (also in supabase/.env)
+// For a hosted Supabase project, set POSTGRES_URL to your project's
+// "Direct connection" string from Settings → Database.
 //
-// Cloud:
-//   Set SUPABASE_URL and SUPABASE_ANON_KEY from your Supabase project settings.
+// Default: local pgvector container started by docker-compose (port 54322).
 
-import { createClient } from '@supabase/supabase-js'
+import { Pool } from 'pg'
 
-const supabaseUrl  = process.env.SUPABASE_URL      ?? 'http://localhost:54321'
-const supabaseKey  = process.env.SUPABASE_ANON_KEY ?? 'your-local-anon-key'
+export const pool = new Pool({
+  connectionString: process.env.POSTGRES_URL
+    ?? 'postgresql://postgres:postgres@localhost:54322/expense_db',
+  max: 10,
+})
 
-export const supabase = createClient(supabaseUrl, supabaseKey)
+pool.on('error', (err) => {
+  console.error('Unexpected pool error:', err.message)
+})
