@@ -18,6 +18,12 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/rest/, ''),
       },
+      // /supa/* → Supabase Express backend (VITE_API_BACKEND=supabase)
+      '/supa': {
+        target: 'http://localhost:8083',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/supa/, ''),
+      },
     },
   },
 })
