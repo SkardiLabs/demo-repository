@@ -9,14 +9,26 @@
 //     conventional REST endpoints. Each operation may require multiple DB
 //     round-trips server-side (ClaimsService + VendorService + PolicyService).
 //
+//   VITE_API_BACKEND=supabase              → api_supabase.ts
+//     All calls go to the Supabase Express backend (port 8083). Complex
+//     queries delegate to PostgreSQL functions via supabase.rpc(), collapsing
+//     MySQL + MongoDB + Lance into a single Supabase PostgreSQL + pgvector DB.
+//     Queue enrichment: 1 CTE query (same count as Skardi).
+//
 // Usage:
 //   VITE_API_BACKEND=traditional npm run dev
+//   VITE_API_BACKEND=supabase    npm run dev
 //   VITE_API_BACKEND=skardi      npm run dev   # (or just: npm run dev)
 
 import * as skardi from './api_skardi'
 import * as traditional from './api_old_style'
+import * as supabaseBackend from './api_supabase'
 
-const impl = import.meta.env.VITE_API_BACKEND === 'traditional' ? traditional : skardi
+const backend = import.meta.env.VITE_API_BACKEND
+const impl =
+  backend === 'traditional' ? traditional :
+  backend === 'supabase'    ? supabaseBackend :
+  skardi
 
 export const listPendingApprovals = impl.listPendingApprovals
 export const listMyClaims = impl.listMyClaims
