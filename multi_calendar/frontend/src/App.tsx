@@ -11,7 +11,7 @@ import {
 import { initialSyncState, pickAdoptedSyncId, syncReducer } from './syncMachine'
 import { newSyncId, weekDays, windowRange } from './time'
 import type { IntegrationStatusRow, Meeting, Source, SyncStatusRow } from './types'
-import ConnectionsPanel, { GOOGLE_REDIRECT_PATH } from './components/ConnectionsPanel'
+import ConnectionsPanel, { FEISHU_REDIRECT_PATH, GOOGLE_REDIRECT_PATH } from './components/ConnectionsPanel'
 import EventPopover from './components/EventPopover'
 import HeaderBar, { type ConnectionStates } from './components/HeaderBar'
 import Toasts, { type ToastMsg } from './components/Toast'
@@ -75,21 +75,25 @@ export default function App() {
     return adopted
   }, [])
 
-  // Google OAuth callback: stash the auth code into the integrations store,
-  // then let the sync agent (which holds the client secret) exchange it.
+  // OAuth callbacks (both providers): stash the auth code into the
+  // integrations store, then the sync agent (which holds the app secrets)
+  // exchanges it for a refresh token.
   const handleOAuthCallback = useCallback(async () => {
-    if (window.location.pathname !== GOOGLE_REDIRECT_PATH) return
+    const path = window.location.pathname
+    const source: Source | null =
+      path === GOOGLE_REDIRECT_PATH ? 'google' : path === FEISHU_REDIRECT_PATH ? 'feishu' : null
+    if (!source) return
     const code = new URLSearchParams(window.location.search).get('code')
     window.history.replaceState(null, '', '/')
     if (!code) {
-      toast('error', 'Google authorization did not return a code — try connecting again.')
+      toast('error', `${source === 'google' ? 'Google' : 'Feishu'} authorization did not return a code — try connecting again.`)
       return
     }
-    await saveIntegration('google', 'pending_exchange', {
+    await saveIntegration(source, 'pending_exchange', {
       auth_code: code,
-      redirect_uri: `${window.location.origin}${GOOGLE_REDIRECT_PATH}`,
+      redirect_uri: `${window.location.origin}${path}`,
     })
-    toast('info', 'Google authorized — finishing setup…')
+    toast('info', `${source === 'google' ? 'Google' : 'Feishu'} authorized — finishing setup…`)
   }, [toast])
 
   // Initial load.
@@ -125,13 +129,6 @@ export default function App() {
     return () => clearInterval(t)
   }, [integrations, refreshIntegrations, toast])
 
-  const onConnectFeishu = useCallback(() => {
-    ;(async () => {
-      await saveIntegration('feishu', 'pending_exchange', {})
-      await refreshIntegrations()
-      toast('info', 'Connecting Feishu…')
-    })().catch((e) => toast('error', `Connecting Feishu failed: ${e.message ?? e}`))
-  }, [refreshIntegrations, toast])
 
   // Poll one source's queued sync request to a terminal state.
   const awaitSyncRequest = useCallback(
@@ -224,7 +221,7 @@ export default function App() {
   }
 
   if (screen === 'connections') {
-    return <ConnectionsPanel rows={integrations} onConnectFeishu={onConnectFeishu} />
+    return <ConnectionsPanel rows={integrations} />
   }
 
   return (
@@ -263,7 +260,7 @@ export default function App() {
         <div className="settings-overlay">
           <ConnectionsPanel
             rows={integrations}
-            onConnectFeishu={onConnectFeishu}
+           
             onClose={() => setShowSettings(false)}
           />
         </div>

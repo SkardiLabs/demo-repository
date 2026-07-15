@@ -16,20 +16,29 @@ import { fileURLToPath } from 'node:url'
 const SKARDI = process.env.SKARDI_URL || 'http://localhost:8081'
 const POLL_MS = 2000
 
-// Provider app credentials are operator config, loaded from multi_calendar/.env
-// (see .env.example). End users never handle them — they just authorize.
-function loadEnvFile() {
+// Provider app credentials: the demo ships registered demo apps in
+// demo_credentials.json (publisher registers once, users provide nothing);
+// a local .env overrides for development. Precedence: env > .env > shipped.
+const HERE = dirname(fileURLToPath(import.meta.url))
+function loadCredentials() {
   try {
-    const path = resolve(dirname(fileURLToPath(import.meta.url)), '../.env')
-    for (const line of readFileSync(path, 'utf8').split('\n')) {
-      const m = line.match(/^([A-Z_]+)=(.*)$/)
-      if (m && !(m[1] in process.env)) process.env[m[1]] = m[2].trim()
+    const shipped = JSON.parse(readFileSync(resolve(HERE, '../demo_credentials.json'), 'utf8'))
+    for (const [k, v] of Object.entries(shipped)) {
+      if (typeof v === 'string' && v && !(k in process.env)) process.env[k] = v
     }
   } catch {
-    /* no .env — env vars may be set directly */
+    /* no shipped credentials */
+  }
+  try {
+    for (const line of readFileSync(resolve(HERE, '../.env'), 'utf8').split('\n')) {
+      const m = line.match(/^([A-Z_]+)=(.*)$/)
+      if (m && m[2].trim()) process.env[m[1]] = m[2].trim()
+    }
+  } catch {
+    /* no .env */
   }
 }
-loadEnvFile()
+loadCredentials()
 
 const ENV = {
   google: () => {
@@ -165,13 +174,43 @@ async function feishuApi(path, opts = {}, token) {
   return json
 }
 
-async function feishuTenantToken() {
+// User OAuth (authen v2) — mirrors the Google flow: the user consents on
+// Feishu's page and the demo reads THEIR calendars via user_access_token.
+// Feishu rotates refresh tokens on every use, so callers must persist the
+// returned refresh_token.
+async function feishuOAuthToken(body) {
   const creds = ENV.feishu()
-  const json = await feishuApi('/auth/v3/tenant_access_token/internal', {
+  const res = await fetch(`${FEISHU}/authen/v2/oauth/token`, {
     method: 'POST',
-    body: JSON.stringify({ app_id: creds.app_id, app_secret: creds.app_secret }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ client_id: creds.app_id, client_secret: creds.app_secret, ...body }),
   })
-  return json.tenant_access_token
+  const json = await res.json()
+  if (!res.ok || json.error || (json.code !== undefined && json.code !== 0)) {
+    throw new Error(`Feishu oauth: ${json.error_description ?? json.msg ?? json.error ?? res.status}`)
+  }
+  if (!json.access_token) throw new Error('Feishu oauth: no access_token in response')
+  return json
+}
+
+async function exchangeFeishuCode(config) {
+  const tok = await feishuOAuthToken({
+    grant_type: 'authorization_code',
+    code: config.auth_code,
+    redirect_uri: config.redirect_uri,
+  })
+  if (!tok.refresh_token) throw new Error('Feishu returned no refresh_token — ensure the offline_access scope is enabled for the app')
+  return { refresh_token: tok.refresh_token }
+}
+
+async function feishuUserToken(config) {
+  const tok = await feishuOAuthToken({ grant_type: 'refresh_token', refresh_token: config.refresh_token })
+  // Persist the rotated refresh token immediately — the old one is now dead.
+  if (tok.refresh_token && tok.refresh_token !== config.refresh_token) {
+    config.refresh_token = tok.refresh_token
+    await saveIntegration('feishu', 'connected', { refresh_token: tok.refresh_token })
+  }
+  return tok.access_token
 }
 
 async function feishuCalendarId(config, token) {
@@ -180,12 +219,12 @@ async function feishuCalendarId(config, token) {
   const json = await feishuApi('/calendar/v4/calendars?page_size=50', {}, token)
   const cals = json.data?.calendar_list ?? []
   const primary = cals.find((c) => c.type === 'primary') ?? cals[0]
-  if (!primary) throw new Error('Feishu: no calendars visible to this app — share a calendar with the app or set calendar_id')
+  if (!primary) throw new Error('Feishu: no calendars visible for this user')
   return primary.calendar_id
 }
 
 async function fetchFeishuEvents(config, fromTs, toTs) {
-  const token = await feishuTenantToken()
+  const token = await feishuUserToken(config)
   const calId = await feishuCalendarId(config, token)
   const items = []
   let pageToken = ''
@@ -262,10 +301,9 @@ async function processIntegrations() {
         await saveIntegration('google', 'connected', stored)
         console.log('[agent] google: OAuth code exchanged, refresh token stored')
       } else if (row.source === 'feishu') {
-        const token = await feishuTenantToken()
-        const calendarId = await feishuCalendarId(config, token)
-        await saveIntegration('feishu', 'connected', { calendar_id: calendarId })
-        console.log(`[agent] feishu: app credential validated (calendar ${calendarId})`)
+        const stored = await exchangeFeishuCode(config)
+        await saveIntegration('feishu', 'connected', stored)
+        console.log('[agent] feishu: OAuth code exchanged, refresh token stored')
       }
     } catch (e) {
       await saveIntegration(row.source, 'error', config, String(e.message ?? e))

@@ -1,12 +1,17 @@
 import type { IntegrationStatusRow } from '../types'
 
 export const GOOGLE_REDIRECT_PATH = '/oauth/google'
+export const FEISHU_REDIRECT_PATH = '/oauth/feishu'
 const GOOGLE_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly'
+const FEISHU_SCOPE = 'calendar:calendar:readonly offline_access'
 
-// Injected at build time from multi_calendar/.env (operator config).
-// Only the client ID reaches the browser; the secret stays with the agent.
+// Injected at build time from the shipped demo_credentials.json (or .env
+// override). Only public app IDs reach the browser; secrets stay with the
+// sync agent.
 declare const __GOOGLE_CLIENT_ID__: string
+declare const __FEISHU_APP_ID__: string
 export const GOOGLE_CLIENT_ID = __GOOGLE_CLIENT_ID__
+export const FEISHU_APP_ID = __FEISHU_APP_ID__
 
 export function googleConsentUrl(): string {
   const redirect = `${window.location.origin}${GOOGLE_REDIRECT_PATH}`
@@ -21,9 +26,20 @@ export function googleConsentUrl(): string {
   return `https://accounts.google.com/o/oauth2/v2/auth?${qs}`
 }
 
+export function feishuConsentUrl(): string {
+  const redirect = `${window.location.origin}${FEISHU_REDIRECT_PATH}`
+  const qs = new URLSearchParams({
+    client_id: FEISHU_APP_ID,
+    redirect_uri: redirect,
+    response_type: 'code',
+    scope: FEISHU_SCOPE,
+    state: 'feishu',
+  })
+  return `https://accounts.feishu.cn/open-apis/authen/v1/authorize?${qs}`
+}
+
 interface Props {
   rows: IntegrationStatusRow[]
-  onConnectFeishu: () => void
   onClose?: () => void
 }
 
@@ -35,7 +51,44 @@ function statusChip(row: IntegrationStatusRow | undefined) {
   return <span className="conn-status conn-err" title={row.error}>Error: {row.error || 'unknown'}</span>
 }
 
-export default function ConnectionsPanel({ rows, onConnectFeishu, onClose }: Props) {
+function ProviderRow({
+  name,
+  desc,
+  row,
+  appId,
+  consentUrl,
+}: {
+  name: string
+  desc: string
+  row: IntegrationStatusRow | undefined
+  appId: string
+  consentUrl: () => string
+}) {
+  return (
+    <div className="conn-row">
+      <div>
+        <div className="conn-name">{name}</div>
+        <div className="conn-desc">{desc}</div>
+      </div>
+      {row?.status === 'connected' ? (
+        statusChip(row)
+      ) : appId ? (
+        <div className="conn-action">
+          {statusChip(row)}
+          <button className="btn-resync" onClick={() => (window.location.href = consentUrl())}>
+            Connect {name}
+          </button>
+        </div>
+      ) : (
+        <span className="conn-status conn-err">
+          Demo app not registered yet — see "Shipping the demo apps" in the README
+        </span>
+      )}
+    </div>
+  )
+}
+
+export default function ConnectionsPanel({ rows, onClose }: Props) {
   const byy = Object.fromEntries(rows.map((r) => [r.source, r]))
 
   return (
@@ -46,47 +99,25 @@ export default function ConnectionsPanel({ rows, onConnectFeishu, onClose }: Pro
       <span className="skardi-mark big">◆</span>
       <h2>Connect your calendars</h2>
       <p className="panel-sub">
-        Authorize once — grants are stored locally and refreshed automatically on every resync.
-        Nothing leaves your machine except the calendar API calls themselves.
+        Sign in and approve read-only calendar access — that's it. Grants are stored locally and
+        refreshed automatically on every resync; nothing leaves your machine except the calendar
+        API calls themselves.
       </p>
 
-      <div className="conn-row">
-        <div>
-          <div className="conn-name">Google Calendar</div>
-          <div className="conn-desc">Sign in and approve read-only access on Google's consent page</div>
-        </div>
-        {byy['google']?.status === 'connected' ? (
-          statusChip(byy['google'])
-        ) : GOOGLE_CLIENT_ID ? (
-          <div className="conn-action">
-            {statusChip(byy['google'])}
-            <button className="btn-resync" onClick={() => (window.location.href = googleConsentUrl())}>
-              Connect Google Calendar
-            </button>
-          </div>
-        ) : (
-          <span className="conn-status conn-err">
-            Operator setup needed: set GOOGLE_CLIENT_ID in multi_calendar/.env (see README)
-          </span>
-        )}
-      </div>
-
-      <div className="conn-row">
-        <div>
-          <div className="conn-name">Feishu Calendar</div>
-          <div className="conn-desc">Uses the demo's Feishu app credential — one click, no sign-in</div>
-        </div>
-        {byy['feishu']?.status === 'connected' ? (
-          statusChip(byy['feishu'])
-        ) : (
-          <div className="conn-action">
-            {statusChip(byy['feishu'])}
-            <button className="btn-resync" onClick={onConnectFeishu}>
-              Connect Feishu
-            </button>
-          </div>
-        )}
-      </div>
+      <ProviderRow
+        name="Google Calendar"
+        desc="Authorize on Google's consent page"
+        row={byy['google']}
+        appId={GOOGLE_CLIENT_ID}
+        consentUrl={googleConsentUrl}
+      />
+      <ProviderRow
+        name="Feishu Calendar"
+        desc="Authorize on Feishu's consent page"
+        row={byy['feishu']}
+        appId={FEISHU_APP_ID}
+        consentUrl={feishuConsentUrl}
+      />
 
       <p className="panel-hint">
         Requires the sync agent: <code>node agent/agent.mjs</code>. Fixture mode instead?{' '}
