@@ -99,8 +99,13 @@ export default function App() {
   // Initial load.
   useEffect(() => {
     ;(async () => {
-      await handleOAuthCallback()
-      const [rows, adopted] = await Promise.all([refreshIntegrations(), loadAdopted()])
+      await handleOAuthCallback().catch(() => {})
+      // Only sync_status failing means skardi is unreachable; a hiccup on the
+      // integrations table alone shouldn't brick the whole app.
+      const [rows, adopted] = await Promise.all([
+        refreshIntegrations().catch(() => [] as IntegrationStatusRow[]),
+        loadAdopted(),
+      ])
       const anyConnected = rows.some((r) => r.status === 'connected' || r.status === 'pending_exchange')
       setScreen(adopted || anyConnected ? 'calendar' : 'connections')
     })().catch(() => setScreen('offline'))
