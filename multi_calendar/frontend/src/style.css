@@ -1,0 +1,63 @@
+/* Skardi visual language — dark navy canvas, Inter, green accent.
+   Tokens sourced from skardi.ai. */
+
+:root {
+  --bg: #060b14;
+  --panel: #0a1220;
+  --panel-2: #0d1628;
+  --text: #e6eef9;
+  --text-dim: #8b9cb3;
+  --accent: #2ee89a;
+  --accent-dim: rgba(29, 168, 105, 0.08);
+  --grid-line: rgba(255, 255, 255, 0.06);
+  --google: #4285f4;
+  --feishu: #14b8a6;
+  --danger: #f66;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #060b14;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  color: var(--text);
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 0%, rgba(29, 168, 105, 0.08) 0%, transparent 60%),
+    linear-gradient(180deg, #0a1220 0%, #060b14 40%, #060b14 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+::selection {
+  background: rgba(46, 232, 154, 0.3);
+  color: #fff;
+}
+
+button {
+  font-family: inherit;
+  transition: opacity 150ms ease-out;
+  cursor: pointer;
+}
+
+button:active {
+  opacity: 0.75;
+}
+
+a {
+  color: inherit;
+}
+
+#root {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
