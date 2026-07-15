@@ -1,0 +1,49 @@
+kind: context
+
+metadata:
+  name: ctx_calendar
+  version: 1.0.0
+  description: >
+    Multi-Calendar demo context. A local SQLite store holds materialized
+    meetings; an Open Connector gateway exposes Google Calendar and Feishu
+    Calendar as stable saas.* tables (live mode).
+
+spec:
+  data_sources:
+    # ── SQLite: meetings (read-write) — the local materialized store ───────
+    - name: "meetings"
+      type: "sqlite"
+      access_mode: "read_write"
+      path: "multi_calendar/data/calendar.db"
+      description: "Materialized meetings, generation-stamped by sync_id"
+      options:
+        table: "meetings"
+
+    # ── Open Connector gateway (LIVE MODE) ──────────────────────────────────
+    # Enable when the skardi `google_calendar` / `feishu_calendar` source
+    # packs land (SkardiLabs/skardi#151 follow-ups) and the open-connector
+    # feishu_app_bot provider gains calendar read actions. Until then, run
+    # in fixture mode (seed/seed.sh) — this block stays commented out.
+    #
+    # - name: "saas"
+    #   type: "open_connector"
+    #   connection_string: "http://localhost:3000"
+    #   hierarchy_level: catalog
+    #   description: "Open Connector gateway owning Google/Feishu credentials"
+    #   open_connector:
+    #     runtime_token_env: OPEN_CONNECTOR_TOKEN
+    #     request_timeout_seconds: 30
+    #     scan_timeout_seconds: 300
+    #     bindings:
+    #       - name: google_cal
+    #         source_pack: google_calendar
+    #         resource:
+    #           calendar_id: primary
+    #         tables:
+    #           - events
+    #       - name: feishu_cal
+    #         source_pack: feishu_calendar
+    #         resource:
+    #           calendar_id: "<your-feishu-calendar-id>"
+    #         tables:
+    #           - events

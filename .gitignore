@@ -1,2 +1,5 @@
 node_modules/
 expense_reimbursement/crates/
+
+# Multi-calendar demo local store
+multi_calendar/data/*.db

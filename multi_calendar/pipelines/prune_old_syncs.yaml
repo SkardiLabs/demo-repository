@@ -1,0 +1,14 @@
+kind: pipeline
+
+metadata:
+  name: prune_old_syncs
+  version: 1.0.0
+  description: >
+    Deletes all generations except the two the frontend wants to keep —
+    the newly adopted sync_id and the previous last-known-good one.
+    Called only after a fully successful resync.
+
+spec:
+  query: |
+    DELETE FROM meetings
+    WHERE sync_id NOT IN ({keep_a}, {keep_b})
