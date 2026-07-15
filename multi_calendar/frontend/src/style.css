@@ -744,3 +744,9 @@ a {
   backdrop-filter: blur(4px);
   overflow-y: auto;
 }
+
+.conn-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}

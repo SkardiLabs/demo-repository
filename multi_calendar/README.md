@@ -79,28 +79,42 @@ follow-ups), the agent gets deleted and the `jobs/` YAMLs take over with no UI c
 node agent/agent.mjs
 ```
 
+### One-time operator setup (`.env`)
+
+Provider **app** credentials are operator config, not something end users ever see:
+
+```bash
+cp .env.example .env   # then fill in
+```
+
+- **Google** — create an OAuth client in Google Cloud Console (type *Web application*)
+  with redirect URI `http://localhost:5174/oauth/google`, enable the Calendar API, and
+  set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
+- **Feishu** — create a custom app with the calendar read scope family
+  (`calendar:calendar:readonly`) and set `FEISHU_APP_ID` / `FEISHU_APP_SECRET`
+  (`FEISHU_CALENDAR_ID` optional; primary auto-detected).
+
+Restart the frontend dev server and the agent after editing `.env`.
+
 ### Connecting your accounts (in the app UI)
 
-The first-run **Connections panel** (also reachable anytime by clicking the Google/Feishu
-chips in the header) collects the integration credentials and stores them in the local
-`integrations` table via skardi:
+End users just click. The first-run **Connections panel** (also reachable anytime by
+clicking the Google/Feishu chips in the header) has two buttons:
 
-- **Google Calendar** — create an OAuth client in Google Cloud Console (type *Web
-  application*) with redirect URI `http://localhost:5174/oauth/google` and the
-  `calendar.readonly` scope. Paste the client ID/secret into the panel and click
-  **Authorize with Google**: the browser runs the consent flow, the app stores the
-  returned code, and the sync agent exchanges it for a refresh token within seconds.
-- **Feishu Calendar** — create a Feishu custom app with the calendar read scope family
-  (`calendar:calendar:readonly`), paste its App ID / App Secret (calendar ID optional —
-  the primary visible calendar is auto-detected). The agent validates the credential and
-  flips the chip to *Connected*.
+- **Connect Google Calendar** — redirects to Google's standard consent page; approve
+  read-only access and you're back in the app. The agent (which holds the client secret)
+  exchanges the code for a refresh token within seconds — only the refresh token is
+  stored locally.
+- **Connect Feishu** — one click; the agent validates the demo's Feishu app credential
+  and auto-detects the primary calendar.
 
-Grants persist across restarts (they live in `data/calendar.db`) and tokens refresh
-automatically on every resync — connect once, resync forever.
+Grants persist across restarts (`data/calendar.db`) and tokens refresh automatically on
+every resync — connect once, resync forever.
 
-> **Security note:** this is a local demo. Credentials are stored in plaintext in the
-> local SQLite file and go no further than your machine and the provider APIs. Don't
-> commit `data/`, and prefer a throwaway OAuth client.
+> **Security note:** this is a local demo. The Google refresh token is stored in
+> plaintext in the local SQLite file; app secrets live in the uncommitted `.env`.
+> Nothing goes further than your machine and the provider APIs. Prefer a throwaway
+> OAuth client, and don't commit `data/` or `.env`.
 
 ### Resync flow
 

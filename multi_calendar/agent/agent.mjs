@@ -9,8 +9,40 @@
 //
 // Usage:  node agent/agent.mjs        (Node 18+, no dependencies)
 
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 const SKARDI = process.env.SKARDI_URL || 'http://localhost:8081'
 const POLL_MS = 2000
+
+// Provider app credentials are operator config, loaded from multi_calendar/.env
+// (see .env.example). End users never handle them — they just authorize.
+function loadEnvFile() {
+  try {
+    const path = resolve(dirname(fileURLToPath(import.meta.url)), '../.env')
+    for (const line of readFileSync(path, 'utf8').split('\n')) {
+      const m = line.match(/^([A-Z_]+)=(.*)$/)
+      if (m && !(m[1] in process.env)) process.env[m[1]] = m[2].trim()
+    }
+  } catch {
+    /* no .env — env vars may be set directly */
+  }
+}
+loadEnvFile()
+
+const ENV = {
+  google: () => {
+    const { GOOGLE_CLIENT_ID: id, GOOGLE_CLIENT_SECRET: secret } = process.env
+    if (!id || !secret) throw new Error('GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET missing — copy multi_calendar/.env.example to .env and fill it in')
+    return { client_id: id, client_secret: secret }
+  },
+  feishu: () => {
+    const { FEISHU_APP_ID: id, FEISHU_APP_SECRET: secret } = process.env
+    if (!id || !secret) throw new Error('FEISHU_APP_ID / FEISHU_APP_SECRET missing — copy multi_calendar/.env.example to .env and fill it in')
+    return { app_id: id, app_secret: secret, calendar_id: process.env.FEISHU_CALENDAR_ID || '' }
+  },
+}
 
 // ── Skardi pipeline client ──────────────────────────────────────────────────
 
@@ -51,9 +83,9 @@ async function googleToken(body) {
 }
 
 async function exchangeGoogleCode(config) {
+  const creds = ENV.google()
   const tok = await googleToken({
-    client_id: config.client_id,
-    client_secret: config.client_secret,
+    ...creds,
     code: config.auth_code,
     redirect_uri: config.redirect_uri,
     grant_type: 'authorization_code',
@@ -61,15 +93,15 @@ async function exchangeGoogleCode(config) {
   if (!tok.refresh_token) {
     throw new Error('Google returned no refresh_token — remove the app grant at myaccount.google.com/permissions and reconnect')
   }
-  return { client_id: config.client_id, client_secret: config.client_secret, refresh_token: tok.refresh_token }
+  // Only the refresh token is persisted; the client secret stays in .env.
+  return { refresh_token: tok.refresh_token }
 }
 
 const GOOGLE_RSVP = { accepted: 'accepted', declined: 'declined' }
 
 async function fetchGoogleEvents(config, fromTs, toTs) {
   const { access_token } = await googleToken({
-    client_id: config.client_id,
-    client_secret: config.client_secret,
+    ...ENV.google(),
     refresh_token: config.refresh_token,
     grant_type: 'refresh_token',
   })
@@ -133,16 +165,18 @@ async function feishuApi(path, opts = {}, token) {
   return json
 }
 
-async function feishuTenantToken(config) {
+async function feishuTenantToken() {
+  const creds = ENV.feishu()
   const json = await feishuApi('/auth/v3/tenant_access_token/internal', {
     method: 'POST',
-    body: JSON.stringify({ app_id: config.app_id, app_secret: config.app_secret }),
+    body: JSON.stringify({ app_id: creds.app_id, app_secret: creds.app_secret }),
   })
   return json.tenant_access_token
 }
 
 async function feishuCalendarId(config, token) {
   if (config.calendar_id) return config.calendar_id
+  if (ENV.feishu().calendar_id) return ENV.feishu().calendar_id
   const json = await feishuApi('/calendar/v4/calendars?page_size=50', {}, token)
   const cals = json.data?.calendar_list ?? []
   const primary = cals.find((c) => c.type === 'primary') ?? cals[0]
@@ -151,7 +185,7 @@ async function feishuCalendarId(config, token) {
 }
 
 async function fetchFeishuEvents(config, fromTs, toTs) {
-  const token = await feishuTenantToken(config)
+  const token = await feishuTenantToken()
   const calId = await feishuCalendarId(config, token)
   const items = []
   let pageToken = ''
@@ -228,10 +262,10 @@ async function processIntegrations() {
         await saveIntegration('google', 'connected', stored)
         console.log('[agent] google: OAuth code exchanged, refresh token stored')
       } else if (row.source === 'feishu') {
-        const token = await feishuTenantToken(config)
-        config.calendar_id = await feishuCalendarId(config, token)
-        await saveIntegration('feishu', 'connected', config)
-        console.log(`[agent] feishu: credentials validated (calendar ${config.calendar_id})`)
+        const token = await feishuTenantToken()
+        const calendarId = await feishuCalendarId(config, token)
+        await saveIntegration('feishu', 'connected', { calendar_id: calendarId })
+        console.log(`[agent] feishu: app credential validated (calendar ${calendarId})`)
       }
     } catch (e) {
       await saveIntegration(row.source, 'error', config, String(e.message ?? e))
