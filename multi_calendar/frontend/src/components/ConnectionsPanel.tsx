@@ -5,13 +5,12 @@ export const FEISHU_REDIRECT_PATH = '/oauth/feishu'
 const GOOGLE_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly'
 const FEISHU_SCOPE = 'calendar:calendar:readonly offline_access'
 
-// Injected at build time from the shipped demo_credentials.json (or .env
-// override). Only public app IDs reach the browser; secrets stay with the
-// sync agent.
-declare const __GOOGLE_CLIENT_ID__: string
-declare const __FEISHU_APP_ID__: string
-export const GOOGLE_CLIENT_ID = __GOOGLE_CLIENT_ID__
-export const FEISHU_APP_ID = __FEISHU_APP_ID__
+// Public app IDs, from the shipped demo_credentials.json (or ../.env
+// override) via Vite's env exposure. Secrets never match the envPrefix
+// allowlist and stay with the sync agent.
+const env = (import.meta as unknown as { env: Record<string, string | undefined> }).env
+export const GOOGLE_CLIENT_ID = env.GOOGLE_CLIENT_ID ?? ''
+export const FEISHU_APP_ID = env.FEISHU_APP_ID ?? ''
 
 export function googleConsentUrl(): string {
   const redirect = `${window.location.origin}${GOOGLE_REDIRECT_PATH}`
