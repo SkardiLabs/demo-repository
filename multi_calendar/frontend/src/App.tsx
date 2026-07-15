@@ -51,6 +51,7 @@ export default function App() {
   const [toasts, setToasts] = useState<ToastMsg[]>([])
   const toastSeq = useRef(0)
   const prevAdopted = useRef<string | null>(null)
+  const autoSync = useRef(false)
 
   const connections = toConnections(integrations)
 
@@ -111,7 +112,9 @@ export default function App() {
     })().catch(() => setScreen('offline'))
   }, [handleOAuthCallback, refreshIntegrations, loadAdopted])
 
-  // While any integration is pending_exchange, poll until the agent settles it.
+  // While any integration is pending_exchange, poll until the agent settles
+  // it — and kick off a resync the moment a source connects, so authorizing
+  // flows straight into data with no extra click.
   useEffect(() => {
     if (!integrations.some((r) => r.status === 'pending_exchange')) return
     const t = setInterval(async () => {
@@ -119,7 +122,8 @@ export default function App() {
       if (!rows) return
       for (const r of rows) {
         if (r.status === 'connected' && integrations.find((o) => o.source === r.source)?.status === 'pending_exchange') {
-          toast('success', `${r.source === 'google' ? 'Google' : 'Feishu'} connected`)
+          toast('success', `${r.source === 'google' ? 'Google' : 'Feishu'} connected — syncing…`)
+          autoSync.current = true
         }
         if (r.status === 'error' && integrations.find((o) => o.source === r.source)?.status === 'pending_exchange') {
           toast('error', `${r.source}: ${r.error}`)
@@ -174,6 +178,14 @@ export default function App() {
       }
     }
   }, [adoptedSyncId, connections, awaitSyncRequest])
+
+  // Auto-resync queued by a just-connected integration.
+  useEffect(() => {
+    if (autoSync.current && syncState.phase !== 'syncing') {
+      autoSync.current = false
+      onResync()
+    }
+  }, [integrations, syncState.phase, onResync])
 
   // React to the sync machine reaching a terminal phase.
   useEffect(() => {
