@@ -18,15 +18,19 @@ services:
       # Live mode only — runtime token minted in the Open Connector dashboard.
       OPEN_CONNECTOR_TOKEN: ${OPEN_CONNECTOR_TOKEN:-}
     volumes:
-      - ./data:/app/multi_calendar/data
-      - ./ctx_calendar.yaml:/app/multi_calendar/ctx_calendar.yaml:ro
-      - ./pipelines:/app/multi_calendar/pipelines:ro
+      - ./data:/multi_calendar/data
+      - ./ctx_calendar.yaml:/multi_calendar/ctx_calendar.yaml:ro
+      - ./pipelines:/multi_calendar/pipelines:ro
       # Live mode: uncomment to load the saas-dependent probes and sync jobs.
-      # - ./pipelines_live:/app/multi_calendar/pipelines_live:ro
-      # - ./jobs:/app/multi_calendar/jobs:ro
+      # - ./pipelines_live:/multi_calendar/pipelines_live:ro
+      # - ./jobs:/multi_calendar/jobs:ro
+    # NOTE: the published image serves pipelines only. Live mode (jobs +
+    # open_connector sources) needs a skardi build with the jobs API and the
+    # calendar source packs — see README.
     command: >
-      --context multi_calendar/ctx_calendar.yaml
+      --ctx multi_calendar/ctx_calendar.yaml
       --pipeline multi_calendar/pipelines
+      --port 8081
 
   # Open Connector gateway — owns Google OAuth + Feishu app credentials.
   # Its dashboard (http://localhost:3000) is where users connect providers;

@@ -1,5 +1,3 @@
-kind: pipeline
-
 metadata:
   name: probe_google
   version: 1.0.0
@@ -8,8 +6,7 @@ metadata:
     the stable saas table; success means the Open Connector grant is live.
     Loaded only in live mode (requires the google_calendar source pack).
 
-spec:
-  query: |
-    SELECT event_id
-    FROM saas.google_cal.events
-    LIMIT 1
+query: |
+  SELECT event_id
+  FROM saas.google_cal.events
+  LIMIT 1

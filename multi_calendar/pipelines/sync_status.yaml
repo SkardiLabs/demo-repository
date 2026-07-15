@@ -1,5 +1,3 @@
-kind: pipeline
-
 metadata:
   name: sync_status
   version: 1.0.0
@@ -9,12 +7,11 @@ metadata:
     (or the newest of any kind if only one source has ever synced), and
     drives the "last synced … · Google N · Feishu M" header from it.
 
-spec:
-  query: |
-    SELECT
-      sync_id,
-      source,
-      COUNT(*) AS cnt
-    FROM meetings
-    GROUP BY sync_id, source
-    ORDER BY sync_id DESC
+query: |
+  SELECT
+    sync_id,
+    source,
+    COUNT(*) AS cnt
+  FROM meetings
+  GROUP BY sync_id, source
+  ORDER BY sync_id DESC

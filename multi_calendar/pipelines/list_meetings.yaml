@@ -1,5 +1,3 @@
-kind: pipeline
-
 metadata:
   name: list_meetings
   version: 1.0.0
@@ -9,22 +7,21 @@ metadata:
     sync_id explicitly — that is what makes partial-failure resyncs safe
     (a half-written generation is never adopted).
 
-spec:
-  query: |
-    SELECT
-      source,
-      event_id,
-      title,
-      description,
-      start_at,
-      end_at,
-      is_all_day,
-      status,
-      organizer,
-      attendees_json,
-      meeting_url,
-      html_link
-    FROM meetings
-    WHERE sync_id = {sync_id}
-      AND (status IS NULL OR status != 'cancelled')
-    ORDER BY start_at
+query: |
+  SELECT
+    source,
+    event_id,
+    title,
+    description,
+    start_at,
+    end_at,
+    is_all_day,
+    status,
+    organizer,
+    attendees_json,
+    meeting_url,
+    html_link
+  FROM meetings
+  WHERE sync_id = {sync_id}
+    AND (status IS NULL OR status != 'cancelled')
+  ORDER BY start_at
