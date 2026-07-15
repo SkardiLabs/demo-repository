@@ -1,0 +1,11 @@
+metadata:
+  name: save_integration
+  version: 1.0.0
+  description: >
+    Upsert step 1: remove any existing integration row for a source before
+    insert_integration re-creates it. Called by the frontend setup forms
+    and by the sync agent when updating grant state.
+
+query: |
+  DELETE FROM integrations
+  WHERE source = {source}

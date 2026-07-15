@@ -1,21 +1,25 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
-import { getJobRun, listMeetings, probe, pruneOldSyncs, runJob, syncStatus } from './api'
+import {
+  getSyncRequests,
+  integrationStatus,
+  listMeetings,
+  pruneOldSyncs,
+  requestSync,
+  saveIntegration,
+  syncStatus,
+} from './api'
 import { initialSyncState, pickAdoptedSyncId, syncReducer } from './syncMachine'
 import { newSyncId, weekDays, windowRange } from './time'
-import type { Meeting, Source, SyncStatusRow } from './types'
-import ConnectionsPanel from './components/ConnectionsPanel'
+import type { IntegrationStatusRow, Meeting, Source, SyncStatusRow } from './types'
+import ConnectionsPanel, { GOOGLE_CREDS_KEY, GOOGLE_REDIRECT_PATH } from './components/ConnectionsPanel'
 import EventPopover from './components/EventPopover'
 import HeaderBar, { type ConnectionStates } from './components/HeaderBar'
 import Toasts, { type ToastMsg } from './components/Toast'
 import WeekGrid from './components/WeekGrid'
 
 const POLL_MS = 1500
-const JOB_BY_SOURCE: Record<Source, string> = {
-  google: 'sync_google_meetings',
-  feishu: 'sync_feishu_meetings',
-}
-const TERMINAL_OK = new Set(['succeeded', 'success', 'completed'])
-const TERMINAL_FAIL = new Set(['failed', 'error', 'cancelled', 'timeout'])
+const SYNC_TIMEOUT_MS = 120_000
+const SOURCES: Source[] = ['google', 'feishu']
 
 type Screen = 'loading' | 'offline' | 'connections' | 'calendar'
 
@@ -25,10 +29,20 @@ function countsFor(rows: SyncStatusRow[], syncId: string | null): Record<string,
   return counts
 }
 
+function toConnections(rows: IntegrationStatusRow[]): ConnectionStates {
+  const get = (s: Source): boolean | null => {
+    const row = rows.find((r) => r.source === s)
+    if (!row) return false
+    return row.status === 'connected' ? true : row.status === 'pending_exchange' ? null : false
+  }
+  return { google: get('google'), feishu: get('feishu') }
+}
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>('loading')
   const [week, setWeek] = useState<0 | 1>(0)
-  const [connections, setConnections] = useState<ConnectionStates>({ google: null, feishu: null })
+  const [integrations, setIntegrations] = useState<IntegrationStatusRow[]>([])
+  const [showSettings, setShowSettings] = useState(false)
   const [adoptedSyncId, setAdoptedSyncId] = useState<string | null>(null)
   const [statusRows, setStatusRows] = useState<SyncStatusRow[]>([])
   const [meetings, setMeetings] = useState<Meeting[]>([])
@@ -38,10 +52,18 @@ export default function App() {
   const toastSeq = useRef(0)
   const prevAdopted = useRef<string | null>(null)
 
+  const connections = toConnections(integrations)
+
   const toast = useCallback((kind: ToastMsg['kind'], text: string) => {
     const id = ++toastSeq.current
     setToasts((ts) => [...ts, { id, kind, text }])
-    setTimeout(() => setToasts((ts) => ts.filter((t) => t.id !== id)), 6000)
+    setTimeout(() => setToasts((ts) => ts.filter((t) => t.id !== id)), 7000)
+  }, [])
+
+  const refreshIntegrations = useCallback(async () => {
+    const rows = await integrationStatus()
+    setIntegrations(rows)
+    return rows
   }, [])
 
   const loadAdopted = useCallback(async (): Promise<string | null> => {
@@ -53,36 +75,90 @@ export default function App() {
     return adopted
   }, [])
 
-  // Initial load: probes + adopted generation in parallel.
+  // Google OAuth callback: stash code + creds into the integrations store,
+  // then let the sync agent do the token exchange server-side.
+  const handleOAuthCallback = useCallback(async () => {
+    if (window.location.pathname !== GOOGLE_REDIRECT_PATH) return
+    const code = new URLSearchParams(window.location.search).get('code')
+    const creds = JSON.parse(localStorage.getItem(GOOGLE_CREDS_KEY) ?? 'null')
+    window.history.replaceState(null, '', '/')
+    if (!code || !creds) {
+      toast('error', 'Google authorization did not return a code — try connecting again.')
+      return
+    }
+    localStorage.removeItem(GOOGLE_CREDS_KEY)
+    await saveIntegration('google', 'pending_exchange', {
+      ...creds,
+      auth_code: code,
+      redirect_uri: `${window.location.origin}${GOOGLE_REDIRECT_PATH}`,
+    })
+    toast('info', 'Google authorized — waiting for the sync agent to exchange the code…')
+    setShowSettings(true)
+  }, [toast])
+
+  // Initial load.
   useEffect(() => {
     ;(async () => {
-      const [google, feishu, adopted] = await Promise.all([
-        probe('google'),
-        probe('feishu'),
-        loadAdopted().catch((e) => {
-          throw e // sync_status failing = skardi unreachable
-        }),
-      ])
-      setConnections({ google, feishu })
-      setScreen(adopted || google || feishu ? 'calendar' : 'connections')
+      await handleOAuthCallback()
+      const [rows, adopted] = await Promise.all([refreshIntegrations(), loadAdopted()])
+      const anyConnected = rows.some((r) => r.status === 'connected' || r.status === 'pending_exchange')
+      setScreen(adopted || anyConnected ? 'calendar' : 'connections')
     })().catch(() => setScreen('offline'))
-  }, [loadAdopted])
+  }, [handleOAuthCallback, refreshIntegrations, loadAdopted])
 
-  // Poll one source's job to a terminal state.
-  const awaitJob = useCallback(
-    async (source: Source, params: Record<string, unknown>) => {
-      try {
-        const runId = await runJob(JOB_BY_SOURCE[source], params)
-        for (;;) {
-          await new Promise((r) => setTimeout(r, POLL_MS))
-          const run = await getJobRun(runId)
-          const s = run.status.toLowerCase()
-          if (TERMINAL_OK.has(s)) return dispatch({ type: 'JOB_DONE', source, ok: true })
-          if (TERMINAL_FAIL.has(s))
-            return dispatch({ type: 'JOB_DONE', source, ok: false, error: run.error ?? run.status })
+  // While any integration is pending_exchange, poll until the agent settles it.
+  useEffect(() => {
+    if (!integrations.some((r) => r.status === 'pending_exchange')) return
+    const t = setInterval(async () => {
+      const rows = await refreshIntegrations().catch(() => null)
+      if (!rows) return
+      for (const r of rows) {
+        if (r.status === 'connected' && integrations.find((o) => o.source === r.source)?.status === 'pending_exchange') {
+          toast('success', `${r.source === 'google' ? 'Google' : 'Feishu'} connected`)
         }
-      } catch (e) {
-        dispatch({ type: 'JOB_DONE', source, ok: false, error: e instanceof Error ? e.message : String(e) })
+        if (r.status === 'error' && integrations.find((o) => o.source === r.source)?.status === 'pending_exchange') {
+          toast('error', `${r.source}: ${r.error}`)
+        }
+      }
+    }, POLL_MS)
+    return () => clearInterval(t)
+  }, [integrations, refreshIntegrations, toast])
+
+  const onSaveFeishu = useCallback(
+    (appId: string, appSecret: string, calendarId: string) => {
+      ;(async () => {
+        await saveIntegration('feishu', 'pending_exchange', {
+          app_id: appId,
+          app_secret: appSecret,
+          calendar_id: calendarId,
+        })
+        await refreshIntegrations()
+        toast('info', 'Feishu credentials saved — waiting for the sync agent to validate…')
+      })().catch((e) => toast('error', `Saving Feishu credentials failed: ${e.message ?? e}`))
+    },
+    [refreshIntegrations, toast],
+  )
+
+  // Poll one source's queued sync request to a terminal state.
+  const awaitSyncRequest = useCallback(
+    async (syncId: string, source: Source) => {
+      const deadline = Date.now() + SYNC_TIMEOUT_MS
+      for (;;) {
+        await new Promise((r) => setTimeout(r, POLL_MS))
+        if (Date.now() > deadline) {
+          return dispatch({
+            type: 'JOB_DONE',
+            source,
+            ok: false,
+            error: 'timed out — is the sync agent running? (node agent/agent.mjs)',
+          })
+        }
+        const rows = await getSyncRequests(syncId).catch(() => [])
+        const row = rows.find((r) => r.source === source)
+        if (!row) continue
+        if (row.status === 'ok') return dispatch({ type: 'JOB_DONE', source, ok: true })
+        if (row.status === 'failed')
+          return dispatch({ type: 'JOB_DONE', source, ok: false, error: row.error || 'sync failed' })
       }
     },
     [dispatch],
@@ -93,10 +169,20 @@ export default function App() {
     const { fromTs, toTs } = windowRange(new Date())
     prevAdopted.current = adoptedSyncId
     dispatch({ type: 'START', syncId })
-    const params = { sync_id: syncId, from_ts: fromTs, to_ts: toTs }
-    void awaitJob('google', params)
-    void awaitJob('feishu', params)
-  }, [adoptedSyncId, awaitJob])
+    for (const source of SOURCES) {
+      if (connections[source] === true) {
+        void requestSync(syncId, source, fromTs, toTs)
+          .then(() => awaitSyncRequest(syncId, source))
+          .catch((e) =>
+            dispatch({ type: 'JOB_DONE', source, ok: false, error: e.message ?? String(e) }),
+          )
+      } else {
+        // Not-connected sources legitimately contribute zero rows; treating
+        // them as vacuously ok keeps "success = every connected source synced".
+        dispatch({ type: 'JOB_DONE', source, ok: true })
+      }
+    }
+  }, [adoptedSyncId, connections, awaitSyncRequest])
 
   // React to the sync machine reaching a terminal phase.
   useEffect(() => {
@@ -112,7 +198,7 @@ export default function App() {
         toast('success', 'Calendars synced')
       })().catch((e) => toast('error', `Post-sync refresh failed: ${e.message ?? e}`))
     } else if (syncState.phase === 'partial_failure' || syncState.phase === 'failure') {
-      const failed = (['google', 'feishu'] as Source[]).filter((s) => syncState.jobs[s] === 'failed')
+      const failed = SOURCES.filter((s) => syncState.jobs[s] === 'failed')
       for (const s of failed) {
         toast('error', `${s === 'google' ? 'Google' : 'Feishu'} sync failed: ${syncState.errors[s] ?? 'unknown error'}`)
       }
@@ -144,7 +230,7 @@ export default function App() {
   }
 
   if (screen === 'connections') {
-    return <ConnectionsPanel connections={connections} />
+    return <ConnectionsPanel rows={integrations} onSaveFeishu={onSaveFeishu} />
   }
 
   return (
@@ -156,6 +242,7 @@ export default function App() {
         lastSync={{ syncId: adoptedSyncId, counts: countsFor(statusRows, adoptedSyncId) }}
         syncState={syncState}
         onResync={onResync}
+        onOpenSettings={() => setShowSettings(true)}
       />
       {meetings.length === 0 ? (
         <div className="fullpage">
@@ -177,6 +264,15 @@ export default function App() {
           onSelect={(m, anchor) => setSelected({ m, anchor })}
           onSwipe={(dir) => setWeek(dir > 0 ? 1 : 0)}
         />
+      )}
+      {showSettings && (
+        <div className="settings-overlay">
+          <ConnectionsPanel
+            rows={integrations}
+            onSaveFeishu={onSaveFeishu}
+            onClose={() => setShowSettings(false)}
+          />
+        </div>
       )}
       {selected && (
         <EventPopover m={selected.m} anchor={selected.anchor} onClose={() => setSelected(null)} />

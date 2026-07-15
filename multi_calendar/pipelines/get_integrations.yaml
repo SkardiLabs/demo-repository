@@ -1,0 +1,10 @@
+metadata:
+  name: get_integrations
+  version: 1.0.0
+  description: >
+    Full integration rows including credentials. Used by the local sync
+    agent to exchange OAuth codes and call provider APIs.
+
+query: |
+  SELECT source, status, config_json, error, updated_at
+  FROM integrations

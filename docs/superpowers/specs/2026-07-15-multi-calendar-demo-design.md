@@ -293,3 +293,22 @@ expense demo's comparison framing — the entire backend is 1 context YAML + 2 j
   instances (both provider APIs support single-instance expansion server-side).
 - Building the skardi source packs or open-connector Feishu actions in this repo — this
   spec only fixes their contract.
+
+## Addendum (2026-07-15): Interim Local Sync Agent
+
+The skardi source packs and open-connector Feishu calendar actions do not exist yet, so
+the demo acquires real events today through an interim local sync agent
+(`multi_calendar/agent/agent.mjs`) — a deliberate stand-in for skardi's open-connector
+jobs with the same generation semantics:
+
+- New SQLite tables `integrations` (stored provider credentials + grant state) and
+  `sync_requests` (resync work queue), both skardi-served with dedicated pipelines.
+- The Connections panel collects credentials in-app: Google OAuth (client ID/secret →
+  browser consent → agent exchanges the code for a refresh token) and Feishu app
+  credentials (agent validates and auto-detects the primary calendar).
+- Resync enqueues per-source rows into `sync_requests`; the agent fetches the two-week
+  window from the provider APIs and appends generation-stamped rows via `insert_meeting`.
+  The frontend polls the queue and keeps the both-or-nothing adoption rule (sources that
+  are not connected count as vacuously successful).
+- The agent talks to skardi exclusively through pipelines; deleting `agent/` and enabling
+  the `saas` bindings + `jobs/` restores the original design unchanged.

@@ -1,0 +1,13 @@
+metadata:
+  name: insert_meeting
+  version: 1.0.0
+  description: >
+    The sync agent materializes one fetched event into the meetings store,
+    stamped with the generation's sync_id. Mirrors the future skardi
+    open-connector jobs' append destination.
+
+query: |
+  INSERT INTO meetings (sync_id, source, event_id, title, description, start_at, end_at,
+                        is_all_day, status, organizer, attendees_json, meeting_url, html_link)
+  VALUES ({sync_id}, {source}, {event_id}, {title}, {description}, {start_at}, {end_at},
+          {is_all_day}, {status}, {organizer}, {attendees_json}, {meeting_url}, {html_link})

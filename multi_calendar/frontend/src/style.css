@@ -666,3 +666,81 @@ a {
 .toast-info {
   color: var(--text-dim);
 }
+
+/* ── Connections setup forms ───────────────────────────────────────────── */
+
+.conn-card {
+  text-align: left;
+  border: 1px solid var(--grid-line);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.conn-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.conn-card input {
+  background: var(--panel-2);
+  border: 1px solid var(--grid-line);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 8px 10px;
+}
+
+.conn-card input:focus {
+  outline: none;
+  border-color: rgba(46, 232, 154, 0.5);
+}
+
+.conn-card .btn-resync {
+  align-self: flex-start;
+}
+
+.conn-status {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.conn-status.conn-wait {
+  color: #cc4;
+}
+
+.conn-status.conn-err {
+  color: var(--danger);
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.conn-chip {
+  background: none;
+}
+
+.panel-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+}
+
+.connections-panel {
+  position: relative;
+}
+
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  background: rgba(3, 6, 12, 0.7);
+  backdrop-filter: blur(4px);
+  overflow-y: auto;
+}

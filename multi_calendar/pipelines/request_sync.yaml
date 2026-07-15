@@ -1,0 +1,11 @@
+metadata:
+  name: request_sync
+  version: 1.0.0
+  description: >
+    Enqueue one source's sync into the work queue. The frontend calls this
+    once per connected source with a fresh sync_id; the sync agent picks
+    pending rows up within ~2 seconds.
+
+query: |
+  INSERT INTO sync_requests (sync_id, source, status, from_ts, to_ts, error, requested_at)
+  VALUES ({sync_id}, {source}, 'pending', {from_ts}, {to_ts}, '', {requested_at})

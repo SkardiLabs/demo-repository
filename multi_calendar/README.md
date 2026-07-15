@@ -10,9 +10,9 @@ week grid styled after [skardi.ai](https://skardi.ai).
 
 | | Typical calendar aggregator | This demo |
 |---|---|---|
-| Backend code | Node/Go service: OAuth flows, API clients, normalizers, REST endpoints | **0 lines** |
-| Configuration | — | 1 context YAML + 2 job YAMLs + 5 pipeline YAMLs |
-| Credential handling | Your problem | Open Connector gateway (local dashboard, persisted grants, auto token refresh) |
+| Backend code | Node/Go service: OAuth flows, API clients, normalizers, REST endpoints | **0 lines** (one ~300-line local sync agent, deleted once skardi's open-connector jobs land) |
+| Configuration | — | 1 context YAML + 14 pipeline/job YAMLs |
+| Credential handling | Your problem | Stored locally via skardi pipelines; OAuth exchange + token refresh by the sync agent |
 | Serving | Live API fan-out on every page load | Local SQLite after sync — **works offline** |
 
 The network is touched only when you press **Resync**. Each resync writes a new
@@ -64,55 +64,74 @@ Run the frontend tests with `npm test` (window math, overlap layout, sync state 
 > `data/calendar.db` and recreate it, restart skardi (`docker restart calendar_skardi`) —
 > it holds a handle to the old file.
 
-## Live Mode (real Google + Feishu)
+## Real Calendars — the Interim Sync Agent
 
-Live mode needs two prerequisites that are **in flight in other repos**:
-
-1. **skardi**: the Open Connector integration foundation and the `google_calendar` /
-   `feishu_calendar` source packs
-   ([SkardiLabs/skardi#151](https://github.com/SkardiLabs/skardi/pull/151) follow-ups),
-   plus the jobs API in the published server image.
-2. **open-connector**: calendar read actions on the `feishu_app_bot` provider
-   (list calendars, list events over a time range). The `googlecalendar` provider already
-   has what we need.
-
-Once those land:
+Real Google + Feishu events work **today** via a small local sync agent
+(`agent/agent.mjs`, Node 18+, zero dependencies). It is a deliberate stand-in for
+skardi's upcoming open-connector jobs: all state — credentials, the resync work queue,
+and the meetings themselves — lives in the skardi-served SQLite, and the agent talks to
+skardi exclusively through pipelines. When the `google_calendar`/`feishu_calendar` source
+packs land ([SkardiLabs/skardi#151](https://github.com/SkardiLabs/skardi/pull/151)
+follow-ups), the agent gets deleted and the `jobs/` YAMLs take over with no UI change.
 
 ```bash
-# 1. Start everything, including the gateway
-OPEN_CONNECTOR_TOKEN=<runtime token> docker compose up -d
-
-# 2. Enable the live YAMLs
-#    - uncomment the `saas` block in ctx_calendar.yaml (set your Feishu calendar_id)
-#    - uncomment the pipelines_live/ and jobs/ mounts in docker-compose.yml
-docker compose restart skardi
+# In addition to the Quick Start services:
+node agent/agent.mjs
 ```
 
-### Connecting your accounts
+### Connecting your accounts (in the app UI)
 
-Open the **Open Connector dashboard** at http://localhost:3000:
+The first-run **Connections panel** (also reachable anytime by clicking the Google/Feishu
+chips in the header) collects the integration credentials and stores them in the local
+`integrations` table via skardi:
 
-- **Google Calendar** — supply your own Google Cloud OAuth client (one-time paste of
-  client ID/secret), then complete the OAuth consent. Scope: `calendar.readonly`.
-- **Feishu Calendar** — create a Feishu app with the
-  `calendar:calendar.event:read` scope family and paste its App ID / App Secret.
-- Mint a **runtime token** for skardi and export it as `OPEN_CONNECTOR_TOKEN`.
+- **Google Calendar** — create an OAuth client in Google Cloud Console (type *Web
+  application*) with redirect URI `http://localhost:5174/oauth/google` and the
+  `calendar.readonly` scope. Paste the client ID/secret into the panel and click
+  **Authorize with Google**: the browser runs the consent flow, the app stores the
+  returned code, and the sync agent exchanges it for a refresh token within seconds.
+- **Feishu Calendar** — create a Feishu custom app with the calendar read scope family
+  (`calendar:calendar:readonly`), paste its App ID / App Secret (calendar ID optional —
+  the primary visible calendar is auto-detected). The agent validates the credential and
+  flips the chip to *Connected*.
 
-Credentials persist in the gateway's Docker volume and refresh automatically — grant once,
-resync forever. They never enter skardi, the frontend, or SQLite.
+Grants persist across restarts (they live in `data/calendar.db`) and tokens refresh
+automatically on every resync — connect once, resync forever.
 
-The app's first-run **Connections panel** (and the header chips) probe each source with a
-1-row skardi query and deep-link to the dashboard until both show *Connected*. Then press
-**Resync**.
+> **Security note:** this is a local demo. Credentials are stored in plaintext in the
+> local SQLite file and go no further than your machine and the provider APIs. Don't
+> commit `data/`, and prefer a throwaway OAuth client.
+
+### Resync flow
+
+Pressing **Resync** enqueues one row per connected source into `sync_requests` (via a
+skardi pipeline), and the agent — polling through skardi — fetches the two-week window
+from each provider API and appends generation-stamped rows into `meetings`. The frontend
+polls the queue, adopts the generation only when every connected source succeeded, and
+prunes old generations. Sources that aren't connected are skipped.
 
 ### Demo script
 
-1. Connect both providers in the dashboard; chips turn green.
-2. Press **Resync** — two skardi jobs run in parallel (`POST /jobs/…/run`), the header
-   shows per-source progress, and the grid fills.
+1. Connect one or both providers in the Connections panel; chips turn green.
+2. Press **Resync** — the header shows per-source progress and the grid fills with your
+   real meetings.
 3. Click a meeting → invitees, RSVP dots, **Join meeting**.
 4. Kill your network. Reload the page. Everything still serves — the calendar reads only
    local SQLite. Only the Resync button needs the network back.
+
+## Future: Skardi-Native Live Mode
+
+The end-state replaces the agent with skardi's own open-connector integration. It needs:
+
+1. **skardi**: the Open Connector foundation + `google_calendar`/`feishu_calendar` source
+   packs, and the jobs API in the published server image.
+2. **open-connector**: calendar read actions on the `feishu_app_bot` provider (the
+   `googlecalendar` provider already has what we need).
+
+Then: uncomment the `saas` block in `ctx_calendar.yaml` and the `pipelines_live/` +
+`jobs/` mounts in `docker-compose.yml`, start the gateway
+(`OPEN_CONNECTOR_TOKEN=… docker compose up -d`), connect providers in the Open Connector
+dashboard (http://localhost:3000), and delete `agent/`.
 
 ## How It Works
 

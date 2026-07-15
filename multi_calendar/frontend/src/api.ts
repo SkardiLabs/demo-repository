@@ -2,7 +2,14 @@
 // Reads are pipeline executions (POST /{name}/execute); resync drives the
 // jobs API (POST /jobs/{name}/run + GET /jobs/runs/{run_id}).
 
-import type { JobRun, Meeting, SkardiBatchResponse, Source, SyncStatusRow } from './types'
+import type {
+  IntegrationStatusRow,
+  Meeting,
+  SkardiBatchResponse,
+  Source,
+  SyncRequestRow,
+  SyncStatusRow,
+} from './types'
 
 const BASE = '/api'
 
@@ -35,39 +42,50 @@ export async function pruneOldSyncs(keepA: string, keepB: string): Promise<void>
   await execute('prune_old_syncs', { keep_a: keepA, keep_b: keepB })
 }
 
-/** Connection probe. In fixture mode the probe pipelines are not loaded, so
- * any failure (404, source-pack error) reads as "not connected". */
-export async function probe(source: Source): Promise<boolean> {
-  try {
-    await execute(source === 'google' ? 'probe_google' : 'probe_feishu', {})
-    return true
-  } catch {
-    return false
-  }
+// ── Integrations (credential setup) ─────────────────────────────────────────
+// Credentials are stored in the local skardi-served SQLite; the sync agent
+// (agent/agent.mjs — interim stand-in for skardi open-connector jobs) reads
+// them, exchanges OAuth codes, and validates Feishu apps.
+
+export function integrationStatus(): Promise<IntegrationStatusRow[]> {
+  return execute<IntegrationStatusRow>('integration_status', {})
 }
 
-export async function runJob(name: string, params: Record<string, unknown>): Promise<string> {
-  const res = await fetch(`${BASE}/jobs/${name}/run`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(params),
+export async function saveIntegration(
+  source: Source,
+  status: 'pending_exchange',
+  config: Record<string, string>,
+): Promise<void> {
+  await execute('save_integration', { source })
+  await execute('insert_integration', {
+    source,
+    status,
+    config_json: JSON.stringify(config),
+    error: '',
+    updated_at: new Date().toISOString(),
   })
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`HTTP ${res.status}: ${text}`)
-  }
-  const json = await res.json()
-  const runId = json.run_id ?? json.id
-  if (!runId) throw new Error('Job submission returned no run_id')
-  return String(runId)
 }
 
-export async function getJobRun(runId: string): Promise<JobRun> {
-  const res = await fetch(`${BASE}/jobs/runs/${runId}`)
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`HTTP ${res.status}: ${text}`)
-  }
-  const json = await res.json()
-  return { run_id: runId, status: String(json.status ?? 'unknown'), error: json.error ?? null }
+// ── Resync work queue ───────────────────────────────────────────────────────
+// The frontend enqueues per-source sync requests; the agent executes them.
+// When skardi's calendar source packs land, these two calls become
+// POST /jobs/sync_*_meetings/run + GET /jobs/runs/:id with no UI change.
+
+export async function requestSync(
+  syncId: string,
+  source: Source,
+  fromTs: string,
+  toTs: string,
+): Promise<void> {
+  await execute('request_sync', {
+    sync_id: syncId,
+    source,
+    from_ts: fromTs,
+    to_ts: toTs,
+    requested_at: new Date().toISOString(),
+  })
+}
+
+export function getSyncRequests(syncId: string): Promise<SyncRequestRow[]> {
+  return execute<SyncRequestRow>('get_sync_requests', { sync_id: syncId })
 }

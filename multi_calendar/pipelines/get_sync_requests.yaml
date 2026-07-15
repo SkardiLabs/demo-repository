@@ -1,0 +1,10 @@
+metadata:
+  name: get_sync_requests
+  version: 1.0.0
+  description: >
+    The frontend's resync poll: per-source status for one generation.
+
+query: |
+  SELECT source, status, error
+  FROM sync_requests
+  WHERE sync_id = {sync_id}

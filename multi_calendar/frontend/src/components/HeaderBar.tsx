@@ -14,19 +14,40 @@ interface Props {
   lastSync: { syncId: string | null; counts: Record<string, number> }
   syncState: SyncState
   onResync: () => void
+  onOpenSettings: () => void
 }
 
-function Chip({ source, state }: { source: Source; state: boolean | null }) {
+function Chip({
+  source,
+  state,
+  onClick,
+}: {
+  source: Source
+  state: boolean | null
+  onClick: () => void
+}) {
   const label = source === 'google' ? 'Google' : 'Feishu'
   const cls = state === null ? 'chip-probing' : state ? 'chip-on' : 'chip-off'
   return (
-    <span className={`conn-chip ${cls}`} title={state ? `${label} connected` : `${label} not connected`}>
+    <button
+      className={`conn-chip ${cls}`}
+      onClick={onClick}
+      title={`${label} ${state ? 'connected' : 'not connected'} — click to manage connections`}
+    >
       <span className="chip-dot" /> {label}
-    </span>
+    </button>
   )
 }
 
-export default function HeaderBar({ week, onWeek, connections, lastSync, syncState, onResync }: Props) {
+export default function HeaderBar({
+  week,
+  onWeek,
+  connections,
+  lastSync,
+  syncState,
+  onResync,
+  onOpenSettings,
+}: Props) {
   const syncing = syncState.phase === 'syncing'
   const canResync = !syncing && (connections.google === true || connections.feishu === true)
   const isFixtureSync = lastSync.syncId?.startsWith('fixture-')
@@ -56,8 +77,8 @@ export default function HeaderBar({ week, onWeek, connections, lastSync, syncSta
       </div>
 
       <div className="header-right">
-        <Chip source="google" state={connections.google} />
-        <Chip source="feishu" state={connections.feishu} />
+        <Chip source="google" state={connections.google} onClick={onOpenSettings} />
+        <Chip source="feishu" state={connections.feishu} onClick={onOpenSettings} />
         {lastSync.syncId && (
           <span className="last-sync">
             {isFixtureSync ? 'fixture data' : `synced ${relativeAgo(lastSync.syncId)}`}

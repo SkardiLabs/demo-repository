@@ -27,10 +27,17 @@ export interface SyncStatusRow {
   cnt: number
 }
 
-export interface JobRun {
-  run_id: string
-  status: string // pending | running | succeeded | failed | ...
-  error?: string | null
+export interface IntegrationStatusRow {
+  source: string
+  status: 'pending_exchange' | 'connected' | 'error' | string
+  error: string
+  updated_at: string
+}
+
+export interface SyncRequestRow {
+  source: string
+  status: 'pending' | 'running' | 'ok' | 'failed' | string
+  error: string
 }
 
 export interface SkardiBatchResponse<T> {

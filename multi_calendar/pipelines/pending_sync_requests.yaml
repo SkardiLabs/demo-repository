@@ -1,0 +1,11 @@
+metadata:
+  name: pending_sync_requests
+  version: 1.0.0
+  description: >
+    The sync agent's poll: all queued sync work, oldest first.
+
+query: |
+  SELECT sync_id, source, status, from_ts, to_ts, requested_at
+  FROM sync_requests
+  WHERE status = 'pending'
+  ORDER BY requested_at

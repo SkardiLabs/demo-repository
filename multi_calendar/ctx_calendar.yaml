@@ -14,6 +14,24 @@ data_sources:
     options:
       table: "meetings"
 
+  # ── SQLite: integrations (read-write) — stored provider credentials ──────
+  - name: "integrations"
+    type: "sqlite"
+    access_mode: "read_write"
+    path: "multi_calendar/data/calendar.db"
+    description: "Google/Feishu integration credentials and grant state"
+    options:
+      table: "integrations"
+
+  # ── SQLite: sync_requests (read-write) — resync work queue ───────────────
+  - name: "sync_requests"
+    type: "sqlite"
+    access_mode: "read_write"
+    path: "multi_calendar/data/calendar.db"
+    description: "Resync work queue consumed by the local sync agent"
+    options:
+      table: "sync_requests"
+
   # ── Open Connector gateway (LIVE MODE) ────────────────────────────────────
   # Enable when the skardi `google_calendar` / `feishu_calendar` source
   # packs land (SkardiLabs/skardi#151 follow-ups) and the open-connector
