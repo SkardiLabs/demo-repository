@@ -1,0 +1,10 @@
+metadata:
+  name: integration_status
+  version: 1.0.0
+  description: >
+    Connection state for the header chips and setup panel — never returns
+    config_json, so credentials stay out of routine UI fetches.
+
+query: |
+  SELECT source, status, error, updated_at
+  FROM integrations

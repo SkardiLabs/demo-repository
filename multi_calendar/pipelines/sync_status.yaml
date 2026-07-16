@@ -1,0 +1,17 @@
+metadata:
+  name: sync_status
+  version: 1.0.0
+  description: >
+    Per-generation, per-source row counts, newest first. On load the
+    frontend adopts the newest sync_id that has rows from BOTH sources
+    (or the newest of any kind if only one source has ever synced), and
+    drives the "last synced … · Google N · Feishu M" header from it.
+
+query: |
+  SELECT
+    sync_id,
+    source,
+    COUNT(*) AS cnt
+  FROM meetings
+  GROUP BY sync_id, source
+  ORDER BY sync_id DESC

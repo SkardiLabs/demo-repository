@@ -1,0 +1,12 @@
+metadata:
+  name: probe_feishu
+  version: 1.0.0
+  description: >
+    Connection probe for the Feishu Calendar binding. A 1-row read against
+    the stable saas table; success means the Open Connector app credential
+    is live. Loaded only in live mode (requires the feishu_calendar pack).
+
+query: |
+  SELECT event_id
+  FROM saas.feishu_cal.events
+  LIMIT 1

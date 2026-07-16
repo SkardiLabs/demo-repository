@@ -1,0 +1,34 @@
+kind: job
+
+metadata:
+  name: sync_feishu_meetings
+  version: 1.0.0
+  description: >
+    Materializes the next two weeks of Feishu Calendar events into the
+    local meetings store, stamped with the caller's sync_id generation.
+    Triggered by the frontend's Resync button via POST /jobs/sync_feishu_meetings/run.
+
+spec:
+  query: |
+    SELECT
+      {sync_id} AS sync_id,
+      'feishu'  AS source,
+      event_id,
+      title,
+      description,
+      start_at,
+      end_at,
+      is_all_day,
+      status,
+      organizer,
+      attendees_json,
+      meeting_url,
+      html_link
+    FROM saas.feishu_cal.events
+    WHERE start_at >= {from_ts}
+      AND start_at <  {to_ts}
+  destination:
+    table: meetings
+    mode: append
+  execution:
+    timeout_ms: 120000

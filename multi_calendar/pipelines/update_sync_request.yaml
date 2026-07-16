@@ -1,0 +1,10 @@
+metadata:
+  name: update_sync_request
+  version: 1.0.0
+  description: >
+    The sync agent reports progress: pending → running → ok | failed.
+
+query: |
+  UPDATE sync_requests
+  SET status = {status}, error = {error}
+  WHERE sync_id = {sync_id} AND source = {source}

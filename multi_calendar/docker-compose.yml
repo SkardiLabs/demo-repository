@@ -1,0 +1,48 @@
+# Multi-Calendar demo — local infrastructure.
+#
+#   docker compose up -d skardi          # fixture mode (default): skardi + sqlite only
+#   docker compose up -d                 # live mode: also start the Open Connector gateway
+#   docker compose down                  # stop
+#
+# Fixture mode needs no credentials: seed the store first (bash seed/seed.sh).
+# Live mode additionally requires the skardi google_calendar / feishu_calendar
+# source packs and open-connector Feishu calendar actions (see README).
+
+services:
+  skardi:
+    image: ghcr.io/skardilabs/skardi/skardi-server:latest
+    container_name: calendar_skardi
+    ports:
+      - "8081:8081"
+    environment:
+      # Live mode only — runtime token minted in the Open Connector dashboard.
+      OPEN_CONNECTOR_TOKEN: ${OPEN_CONNECTOR_TOKEN:-}
+    volumes:
+      - ./data:/multi_calendar/data
+      - ./ctx_calendar.yaml:/multi_calendar/ctx_calendar.yaml:ro
+      - ./pipelines:/multi_calendar/pipelines:ro
+      # Live mode: uncomment to load the saas-dependent probes and sync jobs.
+      # - ./pipelines_live:/multi_calendar/pipelines_live:ro
+      # - ./jobs:/multi_calendar/jobs:ro
+    # NOTE: the published image serves pipelines only. Live mode (jobs +
+    # open_connector sources) needs a skardi build with the jobs API and the
+    # calendar source packs — see README.
+    command: >
+      --ctx multi_calendar/ctx_calendar.yaml
+      --pipeline multi_calendar/pipelines
+      --port 8081
+
+  # Open Connector gateway — owns Google OAuth + Feishu app credentials.
+  # Its dashboard (http://localhost:3000) is where users connect providers;
+  # credentials persist in the named volume across restarts, and the gateway
+  # refreshes tokens for every future resync.
+  open-connector:
+    image: ghcr.io/oomol-lab/open-connector:latest
+    container_name: calendar_open_connector
+    ports:
+      - "3000:3000"
+    volumes:
+      - open_connector_data:/data
+
+volumes:
+  open_connector_data:

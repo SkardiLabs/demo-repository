@@ -1,0 +1,11 @@
+metadata:
+  name: insert_integration
+  version: 1.0.0
+  description: >
+    Upsert step 2: insert the integration row for a source. config_json
+    carries provider credentials (local demo store — see README security
+    note); status is pending_exchange | connected | error.
+
+query: |
+  INSERT INTO integrations (source, status, config_json, error, updated_at)
+  VALUES ({source}, {status}, {config_json}, {error}, {updated_at})

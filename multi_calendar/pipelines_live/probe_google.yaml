@@ -1,0 +1,12 @@
+metadata:
+  name: probe_google
+  version: 1.0.0
+  description: >
+    Connection probe for the Google Calendar binding. A 1-row read against
+    the stable saas table; success means the Open Connector grant is live.
+    Loaded only in live mode (requires the google_calendar source pack).
+
+query: |
+  SELECT event_id
+  FROM saas.google_cal.events
+  LIMIT 1
