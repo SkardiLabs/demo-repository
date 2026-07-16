@@ -5,3 +5,4 @@ expense_reimbursement/crates/
 multi_calendar/data/*.db*
 multi_calendar/frontend/dist/
 multi_calendar/.env
+expense_reimbursement/data/
